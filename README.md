@@ -2,9 +2,6 @@
 
 Welcome to the Pengu Network Tools project! This repository contains a collection of useful network tools packaged into an executable file along with their corresponding source code. These tools are designed to be easy to use without the need for any Python packages or installations.
 
-## Current Issues
-- Currently, it is recommended to run the project through the Python source as the exe is running into errors finding files on some systems. (hotfix underway) 
-
 ## Project Structure
 
 The project is organized into the following folders:
