@@ -2,6 +2,7 @@ from colorama import init, Fore, Style
 import time
 import os
 import subprocess
+import sys
 
 title_ascii = f"""
 {Fore.CYAN}                                ########  ######## ##    ##  ######   ##     ## 
@@ -15,7 +16,11 @@ title_ascii = f"""
 """
 
 # File Paths
-script_dir = os.path.dirname(os.path.realpath(__file__))
+# Determine if the script is running as an executable or as a script
+if getattr(sys, 'frozen', False):
+    script_dir = sys._MEIPASS
+else:
+    script_dir = os.path.dirname(os.path.realpath(__file__))
 
 # Path to the Tool Files
 TCP_Pinger_path = os.path.join(script_dir, "Tools", "tcp_port_ping.bat")
