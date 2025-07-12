@@ -43,32 +43,48 @@ def worker(ip):
         queue.task_done()
 
 def main():
-    ip = input("Enter IP address: ")
-    start_port = int(input("Enter start port: "))
-    end_port = int(input("Enter end port: "))
-    num_threads = int(input("Enter number of threads: "))
-    print("scanning...")
-    # Start worker threads
-    threads = []
-    for _ in range(num_threads):
-        t = threading.Thread(target=worker, args=(ip,))
-        t.start()
-        threads.append(t)
+    while True:
+        try:
+            ip = input("Enter IP address (or 'exit' to quit): ").strip()
+            if ip.lower() == 'exit':
+                break
+                
+            start_port = int(input("Enter start port: "))
+            end_port = int(input("Enter end port: "))
+            num_threads = min(int(input("Enter number of threads: ")), 100)  # Limit threads for efficiency
+            
+            print("Scanning...")
+            
+            # Start worker threads
+            threads = []
+            for _ in range(num_threads):
+                t = threading.Thread(target=worker, args=(ip,))
+                t.daemon = True  # Allow main thread to exit
+                t.start()
+                threads.append(t)
 
-    # Put ports in queue
-    for port in range(start_port, end_port + 1):
-        queue.put(port)
+            # Put ports in queue
+            for port in range(start_port, end_port + 1):
+                queue.put(port)
 
-    # Block until all tasks are done
-    queue.join()
+            # Block until all tasks are done
+            queue.join()
 
-    # Stop workers
-    for _ in range(num_threads):
-        queue.put(None)
-    for t in threads:
-        t.join()
-
-    main()
+            # Stop workers
+            for _ in range(num_threads):
+                queue.put(None)
+            for t in threads:
+                t.join()
+                
+            print(f"{Fore.GREEN}Scan complete for {ip}!")
+            
+        except ValueError:
+            print(f"{Fore.RED}Invalid input. Please enter valid numbers.")
+        except KeyboardInterrupt:
+            print(f"{Fore.YELLOW}\nScan interrupted by user.")
+            break
+        except Exception as e:
+            print(f"{Fore.RED}Error: {e}")
 
 if __name__ == "__main__":
     main()
