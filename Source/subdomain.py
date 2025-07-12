@@ -80,7 +80,8 @@ def load_wordlist(filename):
         print(f"{Fore.RED}Error loading wordlist: {e}")
         return []
 
-if __name__ == "__main__":
+def main():
+    """Main entry point"""
     print(f"""
 {Fore.CYAN} ╔════════════════════════════╗
 {Fore.CYAN} ║ {Fore.MAGENTA}Project Pengu Subdomain Scanner{Fore.CYAN} ║
@@ -133,3 +134,6 @@ if __name__ == "__main__":
             print(f"{Fore.RED}Error during scan: {e}")
             
         print()  # Empty line for readability
+
+if __name__ == "__main__":
+    main()
