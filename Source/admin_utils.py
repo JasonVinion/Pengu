@@ -48,18 +48,20 @@ def request_admin_elevation():
         print(f"{Fore.RED}Failed to request elevation: {e}")
         return False
 
-def show_admin_warning():
-    """Show warning when not running as admin"""
+def get_admin_warning_box():
+    """Get admin warning in a box format similar to help menu"""
     if not is_admin():
-        print(f"""
-{Fore.YELLOW}⚠ WARNING: Running without administrator privileges
-{Fore.YELLOW}Some features may be disabled or not work correctly:
-{Fore.YELLOW}  • Traceroute (requires raw sockets)
-{Fore.YELLOW}  • Advanced network tools
-{Fore.YELLOW}  • Hardware detection (some features)
-""")
-        return True
-    return False
+        return f"""
+{Fore.MAGENTA} ╔════════════════════════════════════════════════════════╗
+{Fore.MAGENTA} ║ {Fore.YELLOW}⚠  Admin privileges not detected{Fore.MAGENTA}                      ║
+{Fore.MAGENTA} ║ {Fore.WHITE}Features requiring admin will be marked with {Fore.YELLOW}⚠{Fore.MAGENTA}         ║
+{Fore.MAGENTA} ╚════════════════════════════════════════════════════════╝
+
+{Fore.YELLOW}Type 'help' to get started.
+"""
+    return f"""
+{Fore.YELLOW}Type 'help' to get started.
+"""
 
 def get_admin_status_indicator():
     """Get admin status indicator for UI"""

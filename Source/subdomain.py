@@ -110,8 +110,8 @@ def main():
     print_banner()
     
     while True:
-        domain = input(f"{Fore.YELLOW}Enter domain to scan (or 'exit' to quit): ").strip()
-        if domain.lower() == 'exit':
+        domain = input(f"{Fore.YELLOW}Enter domain to scan (or 'exit'/'quit' to quit): ").strip()
+        if domain.lower() in ['exit', 'quit']:
             break
         
         if not domain:

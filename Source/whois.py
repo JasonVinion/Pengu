@@ -193,9 +193,9 @@ def main():
     print_banner()
     while True:
         try:
-            target = input(f"{Fore.YELLOW}Enter IP address or hostname (or 'exit' to quit): ").strip()
+            target = input(f"{Fore.YELLOW}Enter IP address or hostname (or 'exit'/'quit' to quit): ").strip()
             
-            if target.lower() == 'exit':
+            if target.lower() in ['exit', 'quit']:
                 break
                 
             if not target:
