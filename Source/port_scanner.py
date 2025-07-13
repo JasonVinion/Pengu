@@ -10,13 +10,15 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-message = f"""
+def print_banner():
+    """Print the port scanner banner"""
+    message = f"""
 {Fore.GREEN} ╔════════════════════════════╗
 {Fore.GREEN} ║ {Fore.MAGENTA}Project Pengu Port Scanner{Fore.GREEN} ╚════╗
 {Fore.GREEN} ║                                 ║
 {Fore.GREEN} ╚═════════════════════════════════╝
 """
-print(message)
+    print(message)
 
 # Thread queue
 queue = Queue()
@@ -43,6 +45,7 @@ def worker(ip):
         queue.task_done()
 
 def main():
+    print_banner()
     while True:
         try:
             ip = input("Enter IP address (or 'exit' to quit): ").strip()

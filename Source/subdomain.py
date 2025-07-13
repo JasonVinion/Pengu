@@ -80,14 +80,18 @@ def load_wordlist(filename):
         print(f"{Fore.RED}Error loading wordlist: {e}")
         return []
 
-def main():
-    """Main entry point"""
+def print_banner():
+    """Print the subdomain scanner banner"""
     print(f"""
 {Fore.CYAN} ╔════════════════════════════╗
 {Fore.CYAN} ║ {Fore.MAGENTA}Project Pengu Subdomain Scanner{Fore.CYAN} ║
 {Fore.CYAN} ║ {Fore.GREEN}Optimized Multi-threaded Version{Fore.CYAN}   ║
 {Fore.CYAN} ╚════════════════════════════╝
 """)
+
+def main():
+    """Main entry point"""
+    print_banner()
     
     while True:
         domain = input(f"{Fore.YELLOW}Enter domain to scan (or 'exit' to quit): ").strip()

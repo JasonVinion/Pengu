@@ -13,7 +13,9 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-print(f"""
+def print_banner():
+    """Print the traceroute banner"""
+    print(f"""
 {Fore.YELLOW} ╔════════════════════════════╗
 {Fore.YELLOW} ║ {Fore.BLUE}Project Pengu Traceroute{Fore.YELLOW}   ╚════╗
 {Fore.YELLOW} ║ {Fore.GREEN}Optimized Cross-Platform{Fore.YELLOW}        ║
@@ -163,6 +165,7 @@ def traceroute():
 
 def main():
     """Main entry point"""
+    print_banner()
     traceroute()
 
 if __name__ == "__main__":
