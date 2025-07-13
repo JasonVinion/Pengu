@@ -10,13 +10,15 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-message = f"""
+def print_banner():
+    """Print the whois/IP lookup banner"""
+    message = f"""
 {Fore.GREEN} ╔════════════════════════════╗
 {Fore.GREEN} ║ {Fore.MAGENTA}Project Pengu IP Lookup{Fore.GREEN}    ╚════╗
 {Fore.GREEN} ║ {Fore.CYAN}Enhanced Multi-Source Data{Fore.GREEN}       ║
 {Fore.GREEN} ╚═════════════════════════════════╝
 """
-print(message)
+    print(message)
 
 def validate_ip(ip):
     """Validate if the input is a valid IP address"""
@@ -188,6 +190,7 @@ def display_whois_results(data, source):
 
 def main():
     """Main function with enhanced input handling"""
+    print_banner()
     while True:
         try:
             target = input(f"{Fore.YELLOW}Enter IP address or hostname (or 'exit' to quit): ").strip()

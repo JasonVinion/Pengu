@@ -10,13 +10,15 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-message = f"""
+def print_banner():
+    """Print the port scanner banner"""
+    message = f"""
 {Fore.GREEN} ╔════════════════════════════╗
 {Fore.GREEN} ║ {Fore.MAGENTA}Project Pengu Port Scanner{Fore.GREEN} ╚════╗
 {Fore.GREEN} ║                                 ║
 {Fore.GREEN} ╚═════════════════════════════════╝
 """
-print(message)
+    print(message)
 
 # Thread queue
 queue = Queue()
@@ -43,6 +45,7 @@ def worker(ip):
         queue.task_done()
 
 def main():
+    print_banner()
     while True:
         try:
             ip = input("Enter IP address (or 'exit' to quit): ").strip()
@@ -51,9 +54,36 @@ def main():
                 
             start_port = int(input("Enter start port: "))
             end_port = int(input("Enter end port: "))
-            num_threads = min(int(input("Enter number of threads: ")), 100)  # Limit threads for efficiency
             
-            print("Scanning...")
+            # Get thread count with hardware recommendation
+            try:
+                # Try to get hardware-based recommendation
+                try:
+                    import system_specs
+                    recommended_threads = system_specs.system_specs.get_thread_recommendation('port_scanning')
+                    print(f"{Fore.GREEN}Hardware-based recommendation: {recommended_threads} threads")
+                except:
+                    recommended_threads = 50
+                    print(f"{Fore.YELLOW}Using default recommendation: {recommended_threads} threads")
+                
+                thread_input = input(f"{Fore.CYAN}Enter number of threads (default: {recommended_threads}): ").strip()
+                if thread_input:
+                    num_threads = int(thread_input)
+                    if num_threads > 200:
+                        print(f"{Fore.YELLOW}Warning: Very high thread count ({num_threads}) may overwhelm the target!")
+                        confirm = input(f"{Fore.YELLOW}Continue anyway? (y/N): ").strip().lower()
+                        if confirm != 'y':
+                            continue
+                else:
+                    num_threads = recommended_threads
+                    
+            except ValueError:
+                print(f"{Fore.RED}Invalid thread count. Using default: 50")
+                num_threads = 50
+                
+            num_threads = min(num_threads, 200)  # Hard limit for safety
+            
+            print(f"{Fore.CYAN}Scanning {ip} ports {start_port}-{end_port} with {num_threads} threads...")
             
             # Start worker threads
             threads = []

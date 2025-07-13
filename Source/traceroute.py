@@ -13,7 +13,9 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
-print(f"""
+def print_banner():
+    """Print the traceroute banner"""
+    print(f"""
 {Fore.YELLOW} ╔════════════════════════════╗
 {Fore.YELLOW} ║ {Fore.BLUE}Project Pengu Traceroute{Fore.YELLOW}   ╚════╗
 {Fore.YELLOW} ║ {Fore.GREEN}Optimized Cross-Platform{Fore.YELLOW}        ║
@@ -127,6 +129,17 @@ def advanced_traceroute(target, max_hops=30):
         print(f"{Fore.YELLOW}Raw sockets require admin/root privileges")
         print(f"{Fore.YELLOW}Falling back to system traceroute")
         system_traceroute(target)
+    except AttributeError as e:
+        # Handle the specific L3WinSocket bug
+        if "'L3WinSocket' object has no attribute 'ins'" in str(e):
+            print(f"{Fore.RED}Known Scapy Windows compatibility issue detected.")
+            print(f"{Fore.YELLOW}This is a bug in the Scapy library on Windows.")
+            print(f"{Fore.YELLOW}Falling back to system traceroute...")
+            system_traceroute(target)
+        else:
+            print(f"{Fore.RED}Advanced traceroute failed: {e}")
+            print(f"{Fore.YELLOW}Falling back to simple traceroute")
+            simple_traceroute(target)
     except Exception as e:
         print(f"{Fore.RED}Advanced traceroute failed: {e}")
         print(f"{Fore.YELLOW}Falling back to simple traceroute")
@@ -163,6 +176,7 @@ def traceroute():
 
 def main():
     """Main entry point"""
+    print_banner()
     traceroute()
 
 if __name__ == "__main__":

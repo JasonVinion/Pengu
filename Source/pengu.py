@@ -101,6 +101,42 @@ def import_tools():
     except Exception as e:
         print(f"{Fore.RED}Warning: Could not import traceroute: {e}")
     
+    try:
+        from . import enhanced_ping
+        tools['enhanced_ping'] = enhanced_ping
+    except ImportError:
+        import enhanced_ping
+        tools['enhanced_ping'] = enhanced_ping
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import enhanced_ping: {e}")
+    
+    try:
+        from . import system_specs
+        tools['system_specs'] = system_specs
+    except ImportError:
+        import system_specs
+        tools['system_specs'] = system_specs
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import system_specs: {e}")
+    
+    try:
+        from . import admin_utils
+        tools['admin_utils'] = admin_utils
+    except ImportError:
+        import admin_utils
+        tools['admin_utils'] = admin_utils
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import admin_utils: {e}")
+    
+    try:
+        from . import proxy_checker
+        tools['proxy_checker'] = proxy_checker
+    except ImportError:
+        import proxy_checker
+        tools['proxy_checker'] = proxy_checker
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import proxy_checker: {e}")
+    
     return tools
 
 # ASCII Art Banner
@@ -122,15 +158,17 @@ help_menu = f"""
 {Fore.MAGENTA} ╠════════════════════════════════════════════════════════╣
 {Fore.MAGENTA} ║ {Fore.GREEN}help       {Fore.WHITE}. Show this help menu{Fore.MAGENTA}                        ║
 {Fore.MAGENTA} ║ {Fore.GREEN}home       {Fore.WHITE}. Return to home screen{Fore.MAGENTA}                     ║
-{Fore.MAGENTA} ║ {Fore.GREEN}ping       {Fore.WHITE}. ICMP Ping utility{Fore.MAGENTA}                         ║
+{Fore.MAGENTA} ║ {Fore.GREEN}ping       {Fore.WHITE}. Enhanced ICMP Ping utility{Fore.MAGENTA}                ║
 {Fore.MAGENTA} ║ {Fore.GREEN}tcp        {Fore.WHITE}. TCP Port connectivity test{Fore.MAGENTA}                ║
 {Fore.MAGENTA} ║ {Fore.GREEN}http       {Fore.WHITE}. HTTP/HTTPS connectivity test{Fore.MAGENTA}              ║
 {Fore.MAGENTA} ║ {Fore.GREEN}port       {Fore.WHITE}. Advanced port scanner{Fore.MAGENTA}                     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}subdomain  {Fore.WHITE}. Multi-threaded subdomain finder{Fore.MAGENTA}           ║
 {Fore.MAGENTA} ║ {Fore.GREEN}tracker    {Fore.WHITE}. GeoIP & WHOIS lookup{Fore.MAGENTA}                      ║
-{Fore.MAGENTA} ║ {Fore.GREEN}traceroute {Fore.WHITE}. Network path tracer{Fore.MAGENTA}                       ║
+{Fore.MAGENTA} ║ {Fore.GREEN}traceroute {Fore.WHITE}. Network path tracer {Fore.YELLOW}⚠{Fore.MAGENTA}                     ║
+{Fore.MAGENTA} ║ {Fore.GREEN}proxy      {Fore.WHITE}. Multi-protocol proxy checker{Fore.MAGENTA}              ║
+{Fore.MAGENTA} ║ {Fore.GREEN}specs      {Fore.WHITE}. System hardware information{Fore.MAGENTA}               ║
 {Fore.MAGENTA} ║ {Fore.GREEN}credit     {Fore.WHITE}. Show credits{Fore.MAGENTA}                               ║
-{Fore.MAGENTA} ║ {Fore.GREEN}exit       {Fore.WHITE}. Exit Pengu{Fore.MAGENTA}                                 ║
+{Fore.MAGENTA} ║ {Fore.GREEN}exit       {Fore.WHITE}. Return to main menu{Fore.MAGENTA}                       ║
 {Fore.MAGENTA} ╚════════════════════════════════════════════════════════╝
 """
 
@@ -278,16 +316,22 @@ def user_inputs():
     # Import tools once at startup
     tools = import_tools()
     
+    # Show admin status warning if needed
+    if 'admin_utils' in tools:
+        tools['admin_utils'].show_admin_warning()
+    
     commands = {
         "help": lambda: print(help_menu),
         "home": return_to_home,
-        "ping": icmp_ping,
+        "ping": lambda: run_tool('enhanced_ping', tools),
         "http": http_ping,
         "tcp": tcp_ping,
         "tracker": lambda: run_tool('whois', tools),
         "port": lambda: run_tool('port_scanner', tools),
-        "traceroute": lambda: run_tool('traceroute', tools),
+        "traceroute": lambda: run_traceroute_with_admin_check(tools),
         "subdomain": lambda: run_tool('subdomain', tools),
+        "proxy": lambda: run_tool('proxy_checker', tools),
+        "specs": lambda: run_tool('system_specs', tools),
         "credit": lambda: print(f"""
 {Fore.GREEN} ╔════════════════════════════════════════╗
 {Fore.GREEN} ║ {Fore.MAGENTA}Pengu Multi-Tool Credits{Fore.GREEN}                   ║
@@ -300,7 +344,12 @@ def user_inputs():
 
     while True:
         try:
-            userinput = input(f"{Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.BLUE}").strip().lower()
+            # Show admin status in prompt
+            admin_indicator = ""
+            if 'admin_utils' in tools:
+                admin_indicator = tools['admin_utils'].get_admin_status_indicator()
+            
+            userinput = input(f"{admin_indicator} {Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.BLUE}").strip().lower()
             
             if userinput in commands:
                 commands[userinput]()
@@ -322,8 +371,28 @@ def user_inputs():
         except Exception as e:
             print(f"{Fore.RED}Error: {e}")
 
+def run_traceroute_with_admin_check(tools):
+    """Run traceroute with admin rights check"""
+    if 'admin_utils' in tools:
+        result = tools['admin_utils'].check_admin_for_tool('traceroute')
+        if result is None:  # User chose to return to main menu
+            return
+        elif not result:  # Continuing without admin
+            print(f"{Fore.YELLOW}Running traceroute with limited functionality...")
+    
+    run_tool('traceroute', tools)
+
 def main():
     """Main entry point"""
+    # Import tools and start background hardware scan
+    tools = import_tools()
+    
+    # Start background hardware scan if system_specs is available
+    if 'system_specs' in tools:
+        import threading
+        scan_thread = threading.Thread(target=tools['system_specs'].system_specs.scan_hardware, daemon=True)
+        scan_thread.start()
+    
     print(title_ascii)
     user_inputs()
 

@@ -43,6 +43,16 @@ def find_subdomains_threaded(domain, wordlist, max_workers=50):
     total_candidates = len(subdomain_candidates)
     checked = 0
     
+    print(f"{Fore.CYAN}Scanning {total_candidates} potential subdomains with {max_workers} threads...")
+    print(f"{Fore.YELLOW}⚠ Warning: High thread counts may trigger rate limiting from target servers.")
+    print(f"{Fore.YELLOW}Consider using a conservative thread count (20-50) for better results.")
+    print(f"{Fore.GREEN}Press Ctrl+C to stop scanning...")
+    print()
+    
+    # Show scanning status
+    print(f"{Fore.YELLOW}Scanning... Found subdomains will appear below:")
+    print(f"{Fore.CYAN}{'='*60}")
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_subdomain = {
@@ -57,12 +67,14 @@ def find_subdomains_threaded(domain, wordlist, max_workers=50):
             
             if subdomain and ips:
                 with print_lock:
-                    print(f"{Fore.GREEN}[{checked}/{total_candidates}] Found: {subdomain} -> {', '.join(ips)}")
+                    print(f"{Fore.GREEN}[✓] {subdomain} -> {', '.join(ips)}")
                 found_subdomains.append((subdomain, ips))
-            else:
-                if checked % 100 == 0:  # Progress indicator
-                    with print_lock:
-                        print(f"{Fore.YELLOW}[{checked}/{total_candidates}] Checking...")
+            
+            # Update progress every 50 checks
+            if checked % 50 == 0:
+                with print_lock:
+                    progress = (checked / total_candidates) * 100
+                    print(f"{Fore.YELLOW}[{checked}/{total_candidates} - {progress:.1f}%] Scanning...")
     
     return found_subdomains
 
@@ -80,14 +92,22 @@ def load_wordlist(filename):
         print(f"{Fore.RED}Error loading wordlist: {e}")
         return []
 
-def main():
-    """Main entry point"""
+def print_banner():
+    """Print the subdomain scanner banner"""
     print(f"""
 {Fore.CYAN} ╔════════════════════════════╗
 {Fore.CYAN} ║ {Fore.MAGENTA}Project Pengu Subdomain Scanner{Fore.CYAN} ║
 {Fore.CYAN} ║ {Fore.GREEN}Optimized Multi-threaded Version{Fore.CYAN}   ║
 {Fore.CYAN} ╚════════════════════════════╝
 """)
+
+def main():
+    """Main entry point"""
+    print_banner()
+    
+def main():
+    """Main entry point"""
+    print_banner()
     
     while True:
         domain = input(f"{Fore.YELLOW}Enter domain to scan (or 'exit' to quit): ").strip()
@@ -101,6 +121,32 @@ def main():
         # Remove protocol if present
         domain = domain.replace('http://', '').replace('https://', '').split('/')[0]
         
+        # Get thread count with hardware recommendation
+        try:
+            # Try to get hardware-based recommendation
+            try:
+                import system_specs
+                recommended_threads = system_specs.system_specs.get_thread_recommendation('subdomain')
+                print(f"{Fore.GREEN}Hardware-based recommendation: {recommended_threads} threads")
+            except:
+                recommended_threads = 50
+                print(f"{Fore.YELLOW}Using default recommendation: {recommended_threads} threads")
+            
+            thread_input = input(f"{Fore.CYAN}Enter number of threads (default: {recommended_threads}): ").strip()
+            if thread_input:
+                max_workers = int(thread_input)
+                if max_workers > 200:
+                    print(f"{Fore.YELLOW}Warning: Very high thread count ({max_workers}) may cause rate limiting!")
+                    confirm = input(f"{Fore.YELLOW}Continue anyway? (y/N): ").strip().lower()
+                    if confirm != 'y':
+                        continue
+            else:
+                max_workers = recommended_threads
+                
+        except ValueError:
+            print(f"{Fore.RED}Invalid thread count. Using default: 50")
+            max_workers = 50
+        
         # Path to the wordlist file (now in Source directory)
         wordlist_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "names.txt")
         
@@ -112,10 +158,10 @@ def main():
             continue
             
         print(f"{Fore.GREEN}Loaded {len(wordlist)} words from wordlist.")
-        print(f"{Fore.YELLOW}Starting subdomain enumeration for {domain}...")
+        print(f"{Fore.YELLOW}Starting subdomain enumeration for {domain} with {max_workers} threads...")
         
         try:
-            found_subdomains = find_subdomains_threaded(domain, wordlist)
+            found_subdomains = find_subdomains_threaded(domain, wordlist, max_workers)
             
             print(f"\n{Fore.GREEN}╔═══════════════════════════╗")
             print(f"{Fore.GREEN}║ {Fore.CYAN}SCAN RESULTS SUMMARY{Fore.GREEN}      ║")
