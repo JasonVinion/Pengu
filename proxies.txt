@@ -1,0 +1,22 @@
+# Sample proxy list for Pengu Proxy Checker
+# Format examples:
+# IP:PORT
+# TYPE://IP:PORT
+# IP:PORT:USER:PASS
+# TYPE://USER:PASS@IP:PORT
+
+# HTTP Proxies
+8.8.8.8:8080
+1.1.1.1:3128
+http://1.2.3.4:8080
+
+# SOCKS Proxies
+socks4://127.0.0.1:1080
+socks5://127.0.0.1:1081
+
+# Proxies with authentication
+http://user:pass@192.168.1.1:8080
+192.168.1.2:3128:username:password
+
+# Note: These are example/dummy proxies for testing the parser
+# Replace with real proxy addresses for actual testing
