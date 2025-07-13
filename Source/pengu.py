@@ -139,8 +139,10 @@ def import_tools():
     
     return tools
 
-# ASCII Art Banner
-title_ascii = f"""
+# ASCII Art Banner (will be generated dynamically)
+def get_title_ascii(tools=None):
+    """Generate title ASCII with admin warning box"""
+    base_ascii = f"""
 {Fore.CYAN}                                ########  ######## ##    ##  ######   ##     ## 
 {Fore.CYAN}                                ##     ## ##       ###   ## ##    ##  ##     ## 
 {Fore.CYAN}                                ##     ## ##       ####  ## ##        ##     ## 
@@ -148,9 +150,20 @@ title_ascii = f"""
 {Fore.CYAN}                                ##        ##       ##  #### ##    ##  ##     ## 
 {Fore.CYAN}                                ##        ##       ##   ### ##    ##  ##     ## 
 {Fore.CYAN}                                ##        ######## ##    ##  ######    #######  
-{Fore.YELLOW}                           Welcome to Pengu! Type 'help' to get started.
+{Fore.YELLOW}                           Welcome to Pengu!
 {Fore.GREEN}                              Optimized Python Version v2.0
 """
+    
+    # Get admin warning box if tools are available
+    if tools and 'admin_utils' in tools:
+        return base_ascii + tools['admin_utils'].get_admin_warning_box()
+    else:
+        # Fallback - check admin status directly
+        try:
+            import admin_utils
+            return base_ascii + admin_utils.get_admin_warning_box()
+        except:
+            return base_ascii + f"\n{Fore.YELLOW}Type 'help' to get started.\n"
 
 help_menu = f"""
 {Fore.MAGENTA} ╔════════════════════════════════════════════════════════╗
@@ -176,10 +189,10 @@ def clear_screen():
     """Clear screen in a cross-platform way"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def return_to_home():
+def return_to_home(tools=None):
     """Clear screen and show banner"""
     clear_screen()
-    print(title_ascii)
+    print(get_title_ascii(tools))
 
 # Ping implementations
 def icmp_ping():
@@ -316,13 +329,9 @@ def user_inputs():
     # Import tools once at startup
     tools = import_tools()
     
-    # Show admin status warning if needed
-    if 'admin_utils' in tools:
-        tools['admin_utils'].show_admin_warning()
-    
     commands = {
         "help": lambda: print(help_menu),
-        "home": return_to_home,
+        "home": lambda: return_to_home(tools),
         "ping": lambda: run_tool('enhanced_ping', tools),
         "http": http_ping,
         "tcp": tcp_ping,
@@ -344,16 +353,11 @@ def user_inputs():
 
     while True:
         try:
-            # Show admin status in prompt
-            admin_indicator = ""
-            if 'admin_utils' in tools:
-                admin_indicator = tools['admin_utils'].get_admin_status_indicator()
-            
-            userinput = input(f"{admin_indicator} {Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.BLUE}").strip().lower()
+            userinput = input(f"{Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.BLUE}").strip().lower()
             
             if userinput in commands:
                 commands[userinput]()
-            elif userinput == "exit":
+            elif userinput in ["exit", "quit"]:
                 print(f"{Fore.GREEN}Thanks for using Pengu! Goodbye...")
                 time.sleep(1)
                 break
@@ -384,16 +388,10 @@ def run_traceroute_with_admin_check(tools):
 
 def main():
     """Main entry point"""
-    # Import tools and start background hardware scan
+    # Import tools (no hardware scan on startup)
     tools = import_tools()
     
-    # Start background hardware scan if system_specs is available
-    if 'system_specs' in tools:
-        import threading
-        scan_thread = threading.Thread(target=tools['system_specs'].system_specs.scan_hardware, daemon=True)
-        scan_thread.start()
-    
-    print(title_ascii)
+    print(get_title_ascii(tools))
     user_inputs()
 
 if __name__ == "__main__":

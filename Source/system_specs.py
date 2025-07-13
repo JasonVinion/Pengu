@@ -195,9 +195,10 @@ class SystemSpecs:
         except Exception as e:
             print(f"{Fore.YELLOW}Warning: Could not detect motherboard info: {e}")
     
-    def scan_hardware(self):
+    def scan_hardware(self, show_progress=True):
         """Scan all hardware in background"""
-        print(f"{Fore.YELLOW}Scanning system hardware...")
+        if show_progress:
+            print(f"{Fore.YELLOW}Scanning system hardware...")
         
         # Create threads for concurrent scanning
         threads = [
@@ -215,7 +216,8 @@ class SystemSpecs:
         for thread in threads:
             thread.join(timeout=5)  # 5 second timeout per thread
         
-        print(f"{Fore.GREEN}Hardware scan complete!")
+        if show_progress:
+            print(f"{Fore.GREEN}Hardware scan complete!")
     
     def get_thread_recommendation(self, task_type="port_scanning"):
         """Get recommended thread count based on hardware"""
