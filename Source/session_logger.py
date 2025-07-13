@@ -52,6 +52,11 @@ class SessionLogger:
         
         self.session_data["tools_used"].append(tool_entry)
         self.session_data["session_summary"]["total_tools_run"] += 1
+        
+        # Ensure unique_tools is a set
+        if isinstance(self.session_data["session_summary"]["unique_tools"], list):
+            self.session_data["session_summary"]["unique_tools"] = set(self.session_data["session_summary"]["unique_tools"])
+        
         self.session_data["session_summary"]["unique_tools"].add(tool_name)
         
         # Update temp log
