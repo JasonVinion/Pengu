@@ -196,41 +196,14 @@ def return_to_home(tools=None):
 
 # Ping implementations
 def icmp_ping():
-    """ICMP ping implementation"""
-    try:
-        import subprocess
-        while True:
-            hostname = input(f"{Fore.YELLOW}Enter hostname/IP to ping (or 'exit'): ").strip()
-            if hostname.lower() == 'exit':
-                break
-            
-            if not hostname:
-                print(f"{Fore.RED}Please enter a valid hostname/IP")
-                continue
-                
-            print(f"{Fore.CYAN}Pinging {hostname}...")
-            
-            try:
-                # Use system ping command
-                if os.name == 'nt':  # Windows
-                    result = subprocess.run(['ping', '-t', hostname], 
-                                          capture_output=False, text=True)
-                else:  # Linux/Unix
-                    result = subprocess.run(['ping', hostname], 
-                                          capture_output=False, text=True)
-            except KeyboardInterrupt:
-                print(f"\n{Fore.YELLOW}Ping stopped by user")
-                break
-            except Exception as e:
-                print(f"{Fore.RED}Error: {e}")
-                
-    except Exception as e:
-        print(f"{Fore.RED}ICMP ping error: {e}")
+    """ICMP ping implementation - deprecated, use enhanced_ping instead"""
+    print(f"{Fore.YELLOW}Please use the 'ping' command for enhanced ICMP ping functionality")
 
 def tcp_ping():
-    """TCP port connectivity test"""
+    """TCP port connectivity test with stats and improved exit"""
     import socket
     import time
+    import statistics
     
     try:
         hostname = input(f"{Fore.YELLOW}Enter hostname/IP: ").strip()
@@ -239,8 +212,14 @@ def tcp_ping():
         print(f"{Fore.CYAN}Testing TCP connectivity to {hostname}:{port}")
         print(f"{Fore.GREEN}Press Ctrl+C to stop")
         
-        while True:
-            try:
+        # Statistics tracking
+        response_times = []
+        successful_connections = 0
+        failed_connections = 0
+        total_attempts = 0
+        
+        try:
+            while True:
                 start_time = time.time()
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(3)
@@ -248,21 +227,67 @@ def tcp_ping():
                 end_time = time.time()
                 sock.close()
                 
+                total_attempts += 1
+                
                 if result == 0:
                     response_time = (end_time - start_time) * 1000
-                    print(f"{Fore.GREEN}Connection succeeded to {hostname}:{port} "
+                    response_times.append(response_time)
+                    successful_connections += 1
+                    print(f"{Fore.GREEN}✓ Connection succeeded to {hostname}:{port} "
                           f"(Response Time: {response_time:.2f}ms)")
                 else:
-                    print(f"{Fore.RED}Connection failed to {hostname}:{port}")
-                    
+                    failed_connections += 1
+                    print(f"{Fore.RED}✗ Connection failed to {hostname}:{port}")
+                
                 time.sleep(1)
                 
-            except KeyboardInterrupt:
-                print(f"\n{Fore.YELLOW}TCP ping stopped")
-                break
-            except Exception as e:
-                print(f"{Fore.RED}Error: {e}")
-                break
+        except KeyboardInterrupt:
+            print(f"\n{Fore.YELLOW}TCP ping stopped")
+        
+        # Show statistics
+        if response_times:
+            avg_time = statistics.mean(response_times)
+            min_time = min(response_times)
+            max_time = max(response_times)
+        else:
+            avg_time = min_time = max_time = 0
+            
+        print(f"""
+{Fore.CYAN}╔══════════════════════════════════════════════════════╗
+{Fore.CYAN}║                {Fore.MAGENTA}TCP Ping Statistics{Fore.CYAN}                   ║
+{Fore.CYAN}╚══════════════════════════════════════════════════════╝
+
+{Fore.GREEN}Connection Summary:
+{Fore.CYAN}  Target:           {Fore.WHITE}{hostname}:{port}
+{Fore.CYAN}  Total Attempts:   {Fore.WHITE}{total_attempts}
+{Fore.CYAN}  Successful:       {Fore.WHITE}{successful_connections}
+{Fore.CYAN}  Failed:           {Fore.WHITE}{failed_connections}
+{Fore.CYAN}  Success Rate:     {Fore.WHITE}{(successful_connections/total_attempts*100) if total_attempts > 0 else 0:.1f}%
+
+{Fore.GREEN}Response Times:
+{Fore.CYAN}  Average:          {Fore.WHITE}{avg_time:.2f}ms
+{Fore.CYAN}  Minimum:          {Fore.WHITE}{min_time:.2f}ms
+{Fore.CYAN}  Maximum:          {Fore.WHITE}{max_time:.2f}ms
+""")
+        
+        # Exit options
+        while True:
+            print(f"""
+{Fore.YELLOW}What would you like to do next?
+{Fore.GREEN}1. {Fore.WHITE}Go back to TCP ping
+{Fore.GREEN}2. {Fore.WHITE}Return to home menu
+""")
+            
+            choice = input(f"{Fore.YELLOW}Select option (1-2): ").strip()
+            
+            if choice == '1':
+                tcp_ping()  # Recursive call to restart
+                return
+            elif choice == '2':
+                return_to_home()
+                return
+            else:
+                print(f"{Fore.RED}Invalid option. Please select 1 or 2.")
                 
     except ValueError:
         print(f"{Fore.RED}Invalid port number")
@@ -270,10 +295,11 @@ def tcp_ping():
         print(f"{Fore.RED}TCP ping error: {e}")
 
 def http_ping():
-    """HTTP/HTTPS connectivity test"""
+    """HTTP/HTTPS connectivity test with stats and improved exit"""
     try:
         import requests
         import time
+        import statistics
         
         url = input(f"{Fore.YELLOW}Enter URL (e.g., https://example.com): ").strip()
         if not url.startswith(('http://', 'https://')):
@@ -282,28 +308,95 @@ def http_ping():
         print(f"{Fore.CYAN}Testing HTTP(S) connectivity to {url}")
         print(f"{Fore.GREEN}Press Ctrl+C to stop")
         
-        while True:
-            try:
+        # Statistics tracking
+        response_times = []
+        successful_requests = 0
+        failed_requests = 0
+        total_requests = 0
+        status_codes = {}
+        
+        try:
+            while True:
                 start_time = time.time()
-                response = requests.get(url, timeout=5)
-                end_time = time.time()
-                
-                response_time = (end_time - start_time) * 1000
-                if response.status_code == 200:
-                    print(f"{Fore.GREEN}HTTP(S) connection succeeded to {url} "
-                          f"(Response Time: {response_time:.2f}ms, Status: {response.status_code})")
-                else:
-                    print(f"{Fore.YELLOW}HTTP(S) connection returned status {response.status_code} "
-                          f"(Response Time: {response_time:.2f}ms)")
+                try:
+                    response = requests.get(url, timeout=5)
+                    end_time = time.time()
                     
+                    total_requests += 1
+                    response_time = (end_time - start_time) * 1000
+                    response_times.append(response_time)
+                    
+                    # Track status codes
+                    status_code = response.status_code
+                    status_codes[status_code] = status_codes.get(status_code, 0) + 1
+                    
+                    if response.status_code == 200:
+                        successful_requests += 1
+                        print(f"{Fore.GREEN}✓ HTTP(S) connection succeeded to {url} "
+                              f"(Response Time: {response_time:.2f}ms, Status: {response.status_code})")
+                    else:
+                        failed_requests += 1
+                        print(f"{Fore.YELLOW}⚠ HTTP(S) connection returned status {response.status_code} "
+                              f"(Response Time: {response_time:.2f}ms)")
+                        
+                except requests.RequestException as e:
+                    total_requests += 1
+                    failed_requests += 1
+                    print(f"{Fore.RED}✗ Connection failed: {e}")
+                
                 time.sleep(1)
                 
-            except KeyboardInterrupt:
-                print(f"\n{Fore.YELLOW}HTTP ping stopped")
-                break
-            except Exception as e:
-                print(f"{Fore.RED}Connection failed: {e}")
-                time.sleep(1)
+        except KeyboardInterrupt:
+            print(f"\n{Fore.YELLOW}HTTP ping stopped")
+        
+        # Show statistics
+        if response_times:
+            avg_time = statistics.mean(response_times)
+            min_time = min(response_times)
+            max_time = max(response_times)
+        else:
+            avg_time = min_time = max_time = 0
+            
+        print(f"""
+{Fore.CYAN}╔══════════════════════════════════════════════════════╗
+{Fore.CYAN}║                {Fore.MAGENTA}HTTP Ping Statistics{Fore.CYAN}                  ║
+{Fore.CYAN}╚══════════════════════════════════════════════════════╝
+
+{Fore.GREEN}Request Summary:
+{Fore.CYAN}  Target:           {Fore.WHITE}{url}
+{Fore.CYAN}  Total Requests:   {Fore.WHITE}{total_requests}
+{Fore.CYAN}  Successful:       {Fore.WHITE}{successful_requests}
+{Fore.CYAN}  Failed:           {Fore.WHITE}{failed_requests}
+{Fore.CYAN}  Success Rate:     {Fore.WHITE}{(successful_requests/total_requests*100) if total_requests > 0 else 0:.1f}%
+
+{Fore.GREEN}Response Times:
+{Fore.CYAN}  Average:          {Fore.WHITE}{avg_time:.2f}ms
+{Fore.CYAN}  Minimum:          {Fore.WHITE}{min_time:.2f}ms
+{Fore.CYAN}  Maximum:          {Fore.WHITE}{max_time:.2f}ms
+
+{Fore.GREEN}Status Codes:""")
+        
+        for status_code, count in status_codes.items():
+            print(f"{Fore.CYAN}  {status_code}:              {Fore.WHITE}{count}")
+        
+        # Exit options
+        while True:
+            print(f"""
+{Fore.YELLOW}What would you like to do next?
+{Fore.GREEN}1. {Fore.WHITE}Go back to HTTP ping
+{Fore.GREEN}2. {Fore.WHITE}Return to home menu
+""")
+            
+            choice = input(f"{Fore.YELLOW}Select option (1-2): ").strip()
+            
+            if choice == '1':
+                http_ping()  # Recursive call to restart
+                return
+            elif choice == '2':
+                return_to_home()
+                return
+            else:
+                print(f"{Fore.RED}Invalid option. Please select 1 or 2.")
                 
     except ImportError:
         print(f"{Fore.RED}Requests module not available for HTTP ping")
