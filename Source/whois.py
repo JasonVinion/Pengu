@@ -497,7 +497,7 @@ def detect_os_fingerprint(ip_address):
             'methods': {}
         }
         
-        # TTL-based detection
+        # TTL-based detection (NOTE: This method has limitations due to network hops)
         try:
             import subprocess
             import platform
@@ -516,21 +516,29 @@ def detect_os_fingerprint(ip_address):
                 if ttl_match:
                     ttl = int(ttl_match.group(1))
                     
-                    # Common TTL values for OS detection
+                    # Improved TTL analysis with ranges and confidence levels
+                    confidence = "Low"
                     if ttl <= 32:
-                        os_guess = "Linux/Unix"
+                        os_guess = "Linux/Unix (or through many hops)"
+                        confidence = "Very Low" if ttl < 20 else "Low"
                     elif ttl <= 64:
                         os_guess = "Linux/Unix"
+                        confidence = "Medium" if ttl > 50 else "Low"
                     elif ttl <= 128:
                         os_guess = "Windows"
+                        confidence = "Medium" if ttl > 100 else "Low"
                     elif ttl <= 255:
                         os_guess = "Cisco/Network Device"
+                        confidence = "Low"
                     else:
                         os_guess = "Unknown"
+                        confidence = "None"
                     
                     fingerprint['methods']['ttl'] = {
                         'ttl_value': ttl,
-                        'os_guess': os_guess
+                        'os_guess': os_guess,
+                        'confidence': confidence,
+                        'note': 'TTL-based detection is unreliable due to network hops decreasing TTL values'
                     }
         except Exception as e:
             fingerprint['methods']['ttl'] = {'error': str(e)}
@@ -571,7 +579,7 @@ def detect_os_fingerprint(ip_address):
         return None, f"OS fingerprinting error: {str(e)}"
 
 def detect_service_versions(ip_address, ports=None):
-    """Basic service version detection"""
+    """Enhanced service version detection"""
     if ports is None:
         ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995]
     
@@ -580,7 +588,7 @@ def detect_service_versions(ip_address, ports=None):
     for port in ports:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
+            sock.settimeout(5)  # Increased timeout
             
             result = sock.connect_ex((ip_address, port))
             if result == 0:
@@ -591,15 +599,41 @@ def detect_service_versions(ip_address, ports=None):
                     'service': get_service_name(port)
                 }
                 
-                # Try to get banner
+                # Enhanced banner grabbing for different service types
                 try:
-                    if port in [21, 22, 25, 110, 143]:  # Ports that typically send banners
+                    if port in [21, 22, 25, 110, 143, 993, 995]:  # Services with immediate banners
                         banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                         if banner:
                             service_info['banner'] = banner
                             service_info['version'] = extract_version_from_banner(banner)
-                except:
-                    pass
+                    
+                    elif port in [80, 8080, 8000]:  # HTTP services
+                        # Send HTTP request to get server header
+                        http_request = f"HEAD / HTTP/1.1\r\nHost: {ip_address}\r\n\r\n"
+                        sock.send(http_request.encode())
+                        response = sock.recv(1024).decode('utf-8', errors='ignore')
+                        if response:
+                            # Extract Server header
+                            server_match = re.search(r'Server:\s*([^\r\n]+)', response, re.IGNORECASE)
+                            if server_match:
+                                service_info['banner'] = server_match.group(1).strip()
+                                service_info['version'] = extract_version_from_banner(server_match.group(1))
+                            else:
+                                service_info['banner'] = "HTTP server (no server header)"
+                                service_info['version'] = "HTTP detected"
+                    
+                    elif port == 443:  # HTTPS service
+                        service_info['banner'] = "HTTPS/SSL service"
+                        service_info['version'] = "SSL/TLS detected"
+                        # Could add SSL certificate analysis here
+                    
+                    elif port == 53:  # DNS service
+                        service_info['banner'] = "DNS service"
+                        service_info['version'] = "DNS detected"
+                    
+                except Exception as e:
+                    # Even if banner grabbing fails, we know the port is open
+                    service_info['banner_error'] = str(e)
                 
                 services[port] = service_info
             
@@ -657,7 +691,12 @@ def display_network_discovery(arp_results, os_fingerprint, service_detection, ta
         
         if 'ttl' in methods and 'error' not in methods['ttl']:
             ttl_info = methods['ttl']
+            confidence = ttl_info.get('confidence', 'Unknown')
+            confidence_color = Fore.GREEN if confidence == 'High' else Fore.YELLOW if confidence == 'Medium' else Fore.RED
             print(f"{Fore.CYAN}  TTL Analysis:      {Fore.WHITE}{ttl_info['os_guess']} (TTL: {ttl_info['ttl_value']})")
+            print(f"{Fore.CYAN}  Confidence:        {confidence_color}{confidence}")
+            if 'note' in ttl_info:
+                print(f"{Fore.YELLOW}  Note: {ttl_info['note']}")
         
         if 'tcp_window' in methods and 'error' not in methods['tcp_window']:
             window_info = methods['tcp_window']
@@ -697,9 +736,21 @@ def get_geoip_info(ip):
     try:
         import requests
         
+        # Check if proxy mode is enabled
+        proxies = None
+        try:
+            from proxy_manager import get_proxy_for_requests
+            proxies = get_proxy_for_requests()
+            if proxies:
+                print(f"{Fore.YELLOW}Using proxy for GeoIP lookup...")
+        except ImportError:
+            pass  # Proxy manager not available
+        except Exception:
+            pass  # No proxy configured
+        
         # Primary source: ipinfo.io
         try:
-            response = requests.get(f"https://ipinfo.io/{ip}/json", timeout=10)
+            response = requests.get(f"https://ipinfo.io/{ip}/json", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if 'error' not in data:
@@ -709,7 +760,7 @@ def get_geoip_info(ip):
         
         # Fallback source: ipapi.co
         try:
-            response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=10)
+            response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if 'error' not in data:
@@ -731,7 +782,7 @@ def get_geoip_info(ip):
             
         # Fallback source: ip-api.com
         try:
-            response = requests.get(f"http://ip-api.com/json/{ip}", timeout=10)
+            response = requests.get(f"http://ip-api.com/json/{ip}", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -762,9 +813,21 @@ def get_basic_whois_info(ip):
     try:
         import requests
         
+        # Check if proxy mode is enabled
+        proxies = None
+        try:
+            from proxy_manager import get_proxy_for_requests
+            proxies = get_proxy_for_requests()
+            if proxies:
+                print(f"{Fore.YELLOW}Using proxy for WHOIS lookup...")
+        except ImportError:
+            pass  # Proxy manager not available
+        except Exception:
+            pass  # No proxy configured
+        
         # Try ARIN REST API
         try:
-            response = requests.get(f"https://whois.arin.net/rest/ip/{ip}.json", timeout=10)
+            response = requests.get(f"https://whois.arin.net/rest/ip/{ip}.json", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 return response.json(), "ARIN"
         except:
@@ -772,7 +835,7 @@ def get_basic_whois_info(ip):
             
         # Try alternative WHOIS service
         try:
-            response = requests.get(f"https://ipwhois.app/json/{ip}", timeout=10)
+            response = requests.get(f"https://ipwhois.app/json/{ip}", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
@@ -818,12 +881,24 @@ def display_whois_results(data, source):
     if source == "ARIN":
         # Handle ARIN format
         whois_net = data.get('net', {})
+        
+        # Try to extract ASN from ARIN data
+        asn_info = "N/A"
+        org_ref = whois_net.get('orgRef', {})
+        if org_ref and '@handle' in org_ref:
+            org_handle = org_ref.get('@handle', '')
+            # ASN often appears in organization handles
+            asn_match = re.search(r'AS(\d+)', org_handle)
+            if asn_match:
+                asn_info = f"AS{asn_match.group(1)}"
+        
         fields = [
             ('Network Name', whois_net.get('name', {}).get('$', 'N/A')),
             ('Handle', whois_net.get('handle', {}).get('$', 'N/A')),
             ('Start Address', whois_net.get('startAddress', {}).get('$', 'N/A')),
             ('End Address', whois_net.get('endAddress', {}).get('$', 'N/A')),
             ('CIDR', whois_net.get('cidr', 'N/A')),
+            ('ASN', asn_info),
             ('Parent Network', whois_net.get('parentNetRef', {}).get('@name', 'N/A')),
             ('Organization', whois_net.get('orgRef', {}).get('@name', 'N/A')),
             ('Registration Date', whois_net.get('registrationDate', 'N/A')),
@@ -1123,10 +1198,13 @@ def perform_complete_intelligence(target):
     # 2. SSL Analysis (if hostname provided)
     if not validate_ip(target):
         print(f"\n{Fore.MAGENTA}[2/4] SSL/TLS Certificate Analysis{Fore.MAGENTA}")
-        ssl_analysis, _ = get_ssl_certificate_info(hostname, 443)
+        ssl_analysis, ssl_status = get_ssl_certificate_info(hostname, 443)
         if ssl_analysis:
             display_ssl_analysis(ssl_analysis, hostname, 443)
             analysis_results['ssl'] = True
+        else:
+            print(f"{Fore.YELLOW}SSL analysis skipped: {ssl_status}")
+            print(f"{Fore.YELLOW}Possible reasons: Port 443 not open, no SSL service, or connection timeout")
     
     # 3. DNS Intelligence (if hostname provided)
     if not validate_ip(target):

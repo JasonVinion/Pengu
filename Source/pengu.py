@@ -360,11 +360,23 @@ def http_ping():
                 total_requests = 0
                 status_codes = {}
                 
+                # Check if proxy mode is enabled
+                proxies = None
+                try:
+                    from proxy_manager import get_proxy_for_requests
+                    proxies = get_proxy_for_requests()
+                    if proxies:
+                        print(f"{Fore.YELLOW}Using proxy for HTTP ping...")
+                except ImportError:
+                    pass  # Proxy manager not available
+                except Exception:
+                    pass  # No proxy configured
+                
                 try:
                     while True:
                         start_time = time.time()
                         try:
-                            response = requests.get(url, timeout=5)
+                            response = requests.get(url, timeout=5, proxies=proxies)
                             end_time = time.time()
                             
                             total_requests += 1
