@@ -305,7 +305,7 @@ def attempt_dns_zone_transfer(hostname):
         return None, f"Zone transfer error: {str(e)}"
 
 def detect_dns_cache_poisoning(hostname):
-    """Basic DNS cache poisoning detection"""
+    """Improved DNS cache poisoning detection that accounts for GeoDNS and load balancing"""
     try:
         import dns.resolver
         
@@ -333,7 +333,7 @@ def detect_dns_cache_poisoning(hostname):
             except Exception as e:
                 a_records[dns_server] = f"Error: {str(e)}"
         
-        # Analyze consistency
+        # Improved analysis that considers GeoDNS and load balancing
         ip_sets = [set(ips) for ips in a_records.values() if isinstance(ips, list)]
         
         if len(ip_sets) > 1:
@@ -341,8 +341,22 @@ def detect_dns_cache_poisoning(hostname):
             all_same = all(ip_set == ip_sets[0] for ip_set in ip_sets)
             
             if not all_same:
-                results['status'] = 'INCONSISTENT'
-                results['warning'] = 'DNS responses vary between servers - possible cache poisoning'
+                # Check if there's any overlap between sets (common for CDNs/GeoDNS)
+                all_ips = set()
+                for ip_set in ip_sets:
+                    all_ips.update(ip_set)
+                
+                # Check if variations are within reasonable bounds for GeoDNS
+                max_ips = max(len(ip_set) for ip_set in ip_sets)
+                min_ips = min(len(ip_set) for ip_set in ip_sets)
+                
+                # More intelligent detection - only flag as suspicious if dramatically different
+                if max_ips > min_ips * 3 or len(all_ips) > 20:
+                    results['status'] = 'SUSPICIOUS'
+                    results['warning'] = 'Significant DNS response variations detected - investigate manually'
+                else:
+                    results['status'] = 'NORMAL_VARIATION'
+                    results['message'] = 'DNS responses vary (likely GeoDNS/CDN load balancing - normal behavior)'
             else:
                 results['status'] = 'CONSISTENT'
                 results['message'] = 'DNS responses consistent across servers'
@@ -396,9 +410,12 @@ def display_dns_analysis(records, zone_transfer, cache_poisoning, hostname):
         print(f"\n{Fore.YELLOW}DNS Cache Poisoning Analysis:")
         status = cache_poisoning.get('status', 'Unknown')
         
-        if status == 'INCONSISTENT':
+        if status == 'SUSPICIOUS':
             print(f"{Fore.RED}  Status: {status}")
             print(f"{Fore.RED}  ⚠ {cache_poisoning.get('warning', '')}")
+        elif status == 'NORMAL_VARIATION':
+            print(f"{Fore.GREEN}  Status: {status}")
+            print(f"{Fore.GREEN}  ✓ {cache_poisoning.get('message', '')}")
         elif status == 'CONSISTENT':
             print(f"{Fore.GREEN}  Status: {status}")
             print(f"{Fore.GREEN}  ✓ {cache_poisoning.get('message', '')}")
@@ -415,6 +432,17 @@ def display_dns_analysis(records, zone_transfer, cache_poisoning, hostname):
 
 def perform_arp_scan(network_range):
     """Perform ARP scan for local network discovery"""
+    # Check for admin privileges since ARP scanning typically requires raw socket access
+    try:
+        from admin_utils import check_admin_for_tool
+        admin_result = check_admin_for_tool('arp_scan')
+        if admin_result is None:  # User chose to return to main menu
+            return None, "User cancelled - admin privileges required"
+        elif not admin_result:  # Continuing without admin
+            print(f"{Fore.YELLOW}Warning: ARP scan may not work properly without admin privileges")
+    except ImportError:
+        print(f"{Fore.YELLOW}Warning: Cannot check admin privileges")
+    
     try:
         from scapy.all import ARP, Ether, srp
         import ipaddress
@@ -452,13 +480,24 @@ def perform_arp_scan(network_range):
 
 def detect_os_fingerprint(ip_address):
     """Basic OS fingerprinting using various techniques"""
+    # Check for admin privileges for advanced fingerprinting
+    try:
+        from admin_utils import check_admin_for_tool
+        admin_result = check_admin_for_tool('os_fingerprinting')
+        if admin_result is None:  # User chose to return to main menu
+            return None, "User cancelled - admin privileges recommended"
+        elif not admin_result:  # Continuing without admin
+            print(f"{Fore.YELLOW}Warning: OS fingerprinting may be limited without admin privileges")
+    except ImportError:
+        print(f"{Fore.YELLOW}Warning: Cannot check admin privileges")
+    
     try:
         fingerprint = {
             'ip': ip_address,
             'methods': {}
         }
         
-        # TTL-based detection
+        # TTL-based detection (NOTE: This method has limitations due to network hops)
         try:
             import subprocess
             import platform
@@ -477,21 +516,29 @@ def detect_os_fingerprint(ip_address):
                 if ttl_match:
                     ttl = int(ttl_match.group(1))
                     
-                    # Common TTL values for OS detection
+                    # Improved TTL analysis with ranges and confidence levels
+                    confidence = "Low"
                     if ttl <= 32:
-                        os_guess = "Linux/Unix"
+                        os_guess = "Linux/Unix (or through many hops)"
+                        confidence = "Very Low" if ttl < 20 else "Low"
                     elif ttl <= 64:
                         os_guess = "Linux/Unix"
+                        confidence = "Medium" if ttl > 50 else "Low"
                     elif ttl <= 128:
                         os_guess = "Windows"
+                        confidence = "Medium" if ttl > 100 else "Low"
                     elif ttl <= 255:
                         os_guess = "Cisco/Network Device"
+                        confidence = "Low"
                     else:
                         os_guess = "Unknown"
+                        confidence = "None"
                     
                     fingerprint['methods']['ttl'] = {
                         'ttl_value': ttl,
-                        'os_guess': os_guess
+                        'os_guess': os_guess,
+                        'confidence': confidence,
+                        'note': 'TTL-based detection is unreliable due to network hops decreasing TTL values'
                     }
         except Exception as e:
             fingerprint['methods']['ttl'] = {'error': str(e)}
@@ -532,7 +579,7 @@ def detect_os_fingerprint(ip_address):
         return None, f"OS fingerprinting error: {str(e)}"
 
 def detect_service_versions(ip_address, ports=None):
-    """Basic service version detection"""
+    """Enhanced service version detection"""
     if ports is None:
         ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995]
     
@@ -541,7 +588,7 @@ def detect_service_versions(ip_address, ports=None):
     for port in ports:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
+            sock.settimeout(5)  # Increased timeout
             
             result = sock.connect_ex((ip_address, port))
             if result == 0:
@@ -552,15 +599,41 @@ def detect_service_versions(ip_address, ports=None):
                     'service': get_service_name(port)
                 }
                 
-                # Try to get banner
+                # Enhanced banner grabbing for different service types
                 try:
-                    if port in [21, 22, 25, 110, 143]:  # Ports that typically send banners
+                    if port in [21, 22, 25, 110, 143, 993, 995]:  # Services with immediate banners
                         banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
                         if banner:
                             service_info['banner'] = banner
                             service_info['version'] = extract_version_from_banner(banner)
-                except:
-                    pass
+                    
+                    elif port in [80, 8080, 8000]:  # HTTP services
+                        # Send HTTP request to get server header
+                        http_request = f"HEAD / HTTP/1.1\r\nHost: {ip_address}\r\n\r\n"
+                        sock.send(http_request.encode())
+                        response = sock.recv(1024).decode('utf-8', errors='ignore')
+                        if response:
+                            # Extract Server header
+                            server_match = re.search(r'Server:\s*([^\r\n]+)', response, re.IGNORECASE)
+                            if server_match:
+                                service_info['banner'] = server_match.group(1).strip()
+                                service_info['version'] = extract_version_from_banner(server_match.group(1))
+                            else:
+                                service_info['banner'] = "HTTP server (no server header)"
+                                service_info['version'] = "HTTP detected"
+                    
+                    elif port == 443:  # HTTPS service
+                        service_info['banner'] = "HTTPS/SSL service"
+                        service_info['version'] = "SSL/TLS detected"
+                        # Could add SSL certificate analysis here
+                    
+                    elif port == 53:  # DNS service
+                        service_info['banner'] = "DNS service"
+                        service_info['version'] = "DNS detected"
+                    
+                except Exception as e:
+                    # Even if banner grabbing fails, we know the port is open
+                    service_info['banner_error'] = str(e)
                 
                 services[port] = service_info
             
@@ -618,7 +691,12 @@ def display_network_discovery(arp_results, os_fingerprint, service_detection, ta
         
         if 'ttl' in methods and 'error' not in methods['ttl']:
             ttl_info = methods['ttl']
+            confidence = ttl_info.get('confidence', 'Unknown')
+            confidence_color = Fore.GREEN if confidence == 'High' else Fore.YELLOW if confidence == 'Medium' else Fore.RED
             print(f"{Fore.CYAN}  TTL Analysis:      {Fore.WHITE}{ttl_info['os_guess']} (TTL: {ttl_info['ttl_value']})")
+            print(f"{Fore.CYAN}  Confidence:        {confidence_color}{confidence}")
+            if 'note' in ttl_info:
+                print(f"{Fore.YELLOW}  Note: {ttl_info['note']}")
         
         if 'tcp_window' in methods and 'error' not in methods['tcp_window']:
             window_info = methods['tcp_window']
@@ -658,9 +736,21 @@ def get_geoip_info(ip):
     try:
         import requests
         
+        # Check if proxy mode is enabled
+        proxies = None
+        try:
+            from proxy_manager import get_proxy_for_requests
+            proxies = get_proxy_for_requests()
+            if proxies:
+                print(f"{Fore.YELLOW}Using proxy for GeoIP lookup...")
+        except ImportError:
+            pass  # Proxy manager not available
+        except Exception:
+            pass  # No proxy configured
+        
         # Primary source: ipinfo.io
         try:
-            response = requests.get(f"https://ipinfo.io/{ip}/json", timeout=10)
+            response = requests.get(f"https://ipinfo.io/{ip}/json", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if 'error' not in data:
@@ -670,7 +760,7 @@ def get_geoip_info(ip):
         
         # Fallback source: ipapi.co
         try:
-            response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=10)
+            response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if 'error' not in data:
@@ -692,7 +782,7 @@ def get_geoip_info(ip):
             
         # Fallback source: ip-api.com
         try:
-            response = requests.get(f"http://ip-api.com/json/{ip}", timeout=10)
+            response = requests.get(f"http://ip-api.com/json/{ip}", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('status') == 'success':
@@ -723,9 +813,21 @@ def get_basic_whois_info(ip):
     try:
         import requests
         
+        # Check if proxy mode is enabled
+        proxies = None
+        try:
+            from proxy_manager import get_proxy_for_requests
+            proxies = get_proxy_for_requests()
+            if proxies:
+                print(f"{Fore.YELLOW}Using proxy for WHOIS lookup...")
+        except ImportError:
+            pass  # Proxy manager not available
+        except Exception:
+            pass  # No proxy configured
+        
         # Try ARIN REST API
         try:
-            response = requests.get(f"https://whois.arin.net/rest/ip/{ip}.json", timeout=10)
+            response = requests.get(f"https://whois.arin.net/rest/ip/{ip}.json", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 return response.json(), "ARIN"
         except:
@@ -733,7 +835,7 @@ def get_basic_whois_info(ip):
             
         # Try alternative WHOIS service
         try:
-            response = requests.get(f"https://ipwhois.app/json/{ip}", timeout=10)
+            response = requests.get(f"https://ipwhois.app/json/{ip}", timeout=10, proxies=proxies)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
@@ -779,12 +881,24 @@ def display_whois_results(data, source):
     if source == "ARIN":
         # Handle ARIN format
         whois_net = data.get('net', {})
+        
+        # Try to extract ASN from ARIN data
+        asn_info = "N/A"
+        org_ref = whois_net.get('orgRef', {})
+        if org_ref and '@handle' in org_ref:
+            org_handle = org_ref.get('@handle', '')
+            # ASN often appears in organization handles
+            asn_match = re.search(r'AS(\d+)', org_handle)
+            if asn_match:
+                asn_info = f"AS{asn_match.group(1)}"
+        
         fields = [
             ('Network Name', whois_net.get('name', {}).get('$', 'N/A')),
             ('Handle', whois_net.get('handle', {}).get('$', 'N/A')),
             ('Start Address', whois_net.get('startAddress', {}).get('$', 'N/A')),
             ('End Address', whois_net.get('endAddress', {}).get('$', 'N/A')),
             ('CIDR', whois_net.get('cidr', 'N/A')),
+            ('ASN', asn_info),
             ('Parent Network', whois_net.get('parentNetRef', {}).get('@name', 'N/A')),
             ('Organization', whois_net.get('orgRef', {}).get('@name', 'N/A')),
             ('Registration Date', whois_net.get('registrationDate', 'N/A')),
@@ -1049,6 +1163,63 @@ def perform_network_discovery_range(network_range):
     else:
         print(f"{Fore.RED}ARP scan failed: {arp_status}")
 
+def export_intelligence_report(target, duration, completed, analysis_results):
+    """Export complete intelligence analysis to file"""
+    try:
+        from datetime import datetime
+        import os
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target_safe = target.replace(':', '_').replace('.', '_').replace('/', '_')
+        filename = f"intelligence_report_{target_safe}_{timestamp}.txt"
+        
+        report_content = f"""PENGU COMPLETE INTELLIGENCE REPORT
+{'=' * 50}
+
+Target:              {target}
+Analysis Date:       {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Analysis Duration:   {duration:.2f} seconds
+Modules Completed:   {completed}/4
+
+ANALYSIS SUMMARY
+{'-' * 30}
+"""
+        
+        # Add module completion status
+        modules = ['GeoIP & WHOIS', 'SSL/TLS Analysis', 'DNS Intelligence', 'Network Discovery']
+        module_keys = ['geoip', 'ssl', 'dns', 'network_discovery']
+        
+        for i, (module_name, key) in enumerate(zip(modules, module_keys)):
+            status = "✓ COMPLETED" if key in analysis_results else "✗ SKIPPED/FAILED"
+            report_content += f"{module_name:20} : {status}\n"
+        
+        report_content += f"""
+DETAILED RESULTS
+{'-' * 30}
+For detailed results, please run the individual analysis modules:
+- Standard GeoIP & WHOIS Lookup
+- SSL/TLS Certificate Analysis  
+- Comprehensive DNS Intelligence
+- Network Discovery (ARP + OS + Services)
+
+This summary report shows which modules completed successfully.
+For full technical details, use the individual analysis options.
+
+Report generated by Pengu v2.1
+"""
+        
+        with open(filename, 'w') as f:
+            f.write(report_content)
+        
+        current_dir = os.getcwd()
+        full_path = os.path.join(current_dir, filename)
+        print(f"{Fore.GREEN}✓ Intelligence report exported to: {full_path}")
+        return filename
+        
+    except Exception as e:
+        print(f"{Fore.RED}Error exporting intelligence report: {e}")
+        return None
+
 def perform_complete_intelligence(target):
     """Perform complete intelligence gathering"""
     start_time = time.time()
@@ -1084,10 +1255,13 @@ def perform_complete_intelligence(target):
     # 2. SSL Analysis (if hostname provided)
     if not validate_ip(target):
         print(f"\n{Fore.MAGENTA}[2/4] SSL/TLS Certificate Analysis{Fore.MAGENTA}")
-        ssl_analysis, _ = get_ssl_certificate_info(hostname, 443)
+        ssl_analysis, ssl_status = get_ssl_certificate_info(hostname, 443)
         if ssl_analysis:
             display_ssl_analysis(ssl_analysis, hostname, 443)
             analysis_results['ssl'] = True
+        else:
+            print(f"{Fore.YELLOW}SSL analysis skipped: {ssl_status}")
+            print(f"{Fore.YELLOW}Possible reasons: Port 443 not open, no SSL service, or connection timeout")
     
     # 3. DNS Intelligence (if hostname provided)
     if not validate_ip(target):
@@ -1119,6 +1293,17 @@ def perform_complete_intelligence(target):
     print(f"{Fore.CYAN}Target:           {Fore.WHITE}{target}")
     print(f"{Fore.CYAN}Analysis Time:    {Fore.WHITE}{duration:.2f} seconds")
     print(f"{Fore.CYAN}Modules Completed: {Fore.WHITE}{completed}/4")
+    
+    # Ask user if they want to export the summary
+    while True:
+        export_choice = input(f"\n{Fore.YELLOW}Would you like to export this analysis summary? (y/N): ").strip().lower()
+        if export_choice in ['y', 'yes']:
+            export_intelligence_report(target, duration, completed, analysis_results)
+            break
+        elif export_choice in ['n', 'no', '']:
+            break
+        else:
+            print(f"{Fore.RED}Please enter 'y' or 'n'")
     
     # Log the complete analysis
     log_tool_usage("enhanced_tracker", {

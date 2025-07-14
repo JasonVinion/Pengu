@@ -19,7 +19,7 @@ def is_admin():
             return ctypes.windll.shell32.IsUserAnAdmin()
         else:  # Linux/Unix
             return os.geteuid() == 0
-    except:
+    except (OSError, AttributeError):
         return False
 
 def request_admin_elevation():
@@ -40,8 +40,10 @@ def request_admin_elevation():
             )
             return True
         else:  # Linux/Unix
-            # Use sudo to elevate
-            args = ['sudo'] + sys.argv
+            # SECURITY FIX: Safely re-launch script with sudo without passing user arguments
+            # Only pass the script name to prevent command injection
+            script_path = os.path.abspath(sys.argv[0])
+            args = ['sudo', sys.executable, script_path]
             subprocess.call(args)
             return True
     except Exception as e:
@@ -72,7 +74,7 @@ def get_admin_status_indicator():
 
 def check_admin_for_tool(tool_name):
     """Check if admin rights are needed for a specific tool and prompt if needed"""
-    admin_required_tools = ['traceroute']
+    admin_required_tools = ['traceroute', 'arp_scan', 'os_fingerprinting', 'network_discovery']
     
     if tool_name.lower() in admin_required_tools and not is_admin():
         print(f"""
