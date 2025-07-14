@@ -19,7 +19,7 @@ def is_admin():
             return ctypes.windll.shell32.IsUserAnAdmin()
         else:  # Linux/Unix
             return os.geteuid() == 0
-    except:
+    except (OSError, AttributeError):
         return False
 
 def request_admin_elevation():

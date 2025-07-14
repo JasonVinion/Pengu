@@ -353,7 +353,7 @@ def tcp_ping():
             port = int(input(f"{Fore.YELLOW}Enter port: "))
             
             print(f"{Fore.CYAN}Testing TCP connectivity to {hostname}:{port}")
-            print(f"{Fore.GREEN}Press Ctrl+C to stop")
+            print(f"{Fore.GREEN}Press 'q' to stop")
             
             # Statistics tracking
             response_times = []
@@ -361,8 +361,53 @@ def tcp_ping():
             failed_connections = 0
             total_attempts = 0
             
+            # Setup for non-blocking input
+            stop_tcp_ping = False
+            
+            def check_for_q_tcp():
+                nonlocal stop_tcp_ping
+                if os.name == 'nt':  # Windows
+                    import msvcrt
+                    while not stop_tcp_ping:
+                        try:
+                            if msvcrt.kbhit():
+                                key = msvcrt.getch().decode('utf-8').lower()
+                                if key == 'q':
+                                    stop_tcp_ping = True
+                                    break
+                        except:
+                            pass
+                        time.sleep(0.1)
+                else:  # Linux/Unix
+                    try:
+                        import select
+                        import termios
+                        import tty
+                        
+                        if not sys.stdin.isatty():
+                            return
+                        
+                        old_settings = termios.tcgetattr(sys.stdin)
+                        try:
+                            tty.setraw(sys.stdin.fileno())
+                            while not stop_tcp_ping:
+                                if select.select([sys.stdin], [], [], 0.1) == ([sys.stdin], [], []):
+                                    key = sys.stdin.read(1).lower()
+                                    if key == 'q':
+                                        stop_tcp_ping = True
+                                        break
+                        finally:
+                            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                    except Exception:
+                        pass
+            
+            # Start key monitoring thread
+            import threading
+            key_thread = threading.Thread(target=check_for_q_tcp, daemon=True)
+            key_thread.start()
+            
             try:
-                while True:
+                while not stop_tcp_ping:
                     start_time = time.time()
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(3)
@@ -382,10 +427,17 @@ def tcp_ping():
                         failed_connections += 1
                         print(f"{Fore.RED}✗ Connection failed to {hostname}:{port}")
                     
-                    time.sleep(1)
+                    # Short sleep but allow checking for 'q' key
+                    for _ in range(10):  # 1 second total, checked in 0.1s intervals
+                        if stop_tcp_ping:
+                            break
+                        time.sleep(0.1)
                     
             except KeyboardInterrupt:
                 print(f"\n{Fore.YELLOW}TCP ping stopped")
+            
+            # Stop the key monitoring thread
+            stop_tcp_ping = True
             
             # Show statistics
             if response_times:
@@ -455,7 +507,7 @@ def http_ping():
                     url = 'https://' + url
                     
                 print(f"{Fore.CYAN}Testing HTTP(S) connectivity to {url}")
-                print(f"{Fore.GREEN}Press Ctrl+C to stop")
+                print(f"{Fore.GREEN}Press 'q' to stop")
                 
                 # Statistics tracking
                 response_times = []
@@ -476,8 +528,53 @@ def http_ping():
                 except Exception:
                     pass  # No proxy configured
                 
+                # Setup for non-blocking input
+                stop_http_ping = False
+                
+                def check_for_q_http():
+                    nonlocal stop_http_ping
+                    if os.name == 'nt':  # Windows
+                        import msvcrt
+                        while not stop_http_ping:
+                            try:
+                                if msvcrt.kbhit():
+                                    key = msvcrt.getch().decode('utf-8').lower()
+                                    if key == 'q':
+                                        stop_http_ping = True
+                                        break
+                            except:
+                                pass
+                            time.sleep(0.1)
+                    else:  # Linux/Unix
+                        try:
+                            import select
+                            import termios
+                            import tty
+                            
+                            if not sys.stdin.isatty():
+                                return
+                            
+                            old_settings = termios.tcgetattr(sys.stdin)
+                            try:
+                                tty.setraw(sys.stdin.fileno())
+                                while not stop_http_ping:
+                                    if select.select([sys.stdin], [], [], 0.1) == ([sys.stdin], [], []):
+                                        key = sys.stdin.read(1).lower()
+                                        if key == 'q':
+                                            stop_http_ping = True
+                                            break
+                            finally:
+                                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                        except Exception:
+                            pass
+                
+                # Start key monitoring thread
+                import threading
+                key_thread = threading.Thread(target=check_for_q_http, daemon=True)
+                key_thread.start()
+                
                 try:
-                    while True:
+                    while not stop_http_ping:
                         start_time = time.time()
                         try:
                             response = requests.get(url, timeout=5, proxies=proxies)
@@ -505,10 +602,17 @@ def http_ping():
                             failed_requests += 1
                             print(f"{Fore.RED}✗ Connection failed: {e}")
                         
-                        time.sleep(1)
+                        # Short sleep but allow checking for 'q' key
+                        for _ in range(10):  # 1 second total, checked in 0.1s intervals
+                            if stop_http_ping:
+                                break
+                            time.sleep(0.1)
                         
                 except KeyboardInterrupt:
                     print(f"\n{Fore.YELLOW}HTTP ping stopped")
+                
+                # Stop the key monitoring thread
+                stop_http_ping = True
                 
                 # Show statistics
                 if response_times:
