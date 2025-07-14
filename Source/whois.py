@@ -305,7 +305,7 @@ def attempt_dns_zone_transfer(hostname):
         return None, f"Zone transfer error: {str(e)}"
 
 def detect_dns_cache_poisoning(hostname):
-    """Basic DNS cache poisoning detection"""
+    """Improved DNS cache poisoning detection that accounts for GeoDNS and load balancing"""
     try:
         import dns.resolver
         
@@ -333,7 +333,7 @@ def detect_dns_cache_poisoning(hostname):
             except Exception as e:
                 a_records[dns_server] = f"Error: {str(e)}"
         
-        # Analyze consistency
+        # Improved analysis that considers GeoDNS and load balancing
         ip_sets = [set(ips) for ips in a_records.values() if isinstance(ips, list)]
         
         if len(ip_sets) > 1:
@@ -341,8 +341,22 @@ def detect_dns_cache_poisoning(hostname):
             all_same = all(ip_set == ip_sets[0] for ip_set in ip_sets)
             
             if not all_same:
-                results['status'] = 'INCONSISTENT'
-                results['warning'] = 'DNS responses vary between servers - possible cache poisoning'
+                # Check if there's any overlap between sets (common for CDNs/GeoDNS)
+                all_ips = set()
+                for ip_set in ip_sets:
+                    all_ips.update(ip_set)
+                
+                # Check if variations are within reasonable bounds for GeoDNS
+                max_ips = max(len(ip_set) for ip_set in ip_sets)
+                min_ips = min(len(ip_set) for ip_set in ip_sets)
+                
+                # More intelligent detection - only flag as suspicious if dramatically different
+                if max_ips > min_ips * 3 or len(all_ips) > 20:
+                    results['status'] = 'SUSPICIOUS'
+                    results['warning'] = 'Significant DNS response variations detected - investigate manually'
+                else:
+                    results['status'] = 'NORMAL_VARIATION'
+                    results['message'] = 'DNS responses vary (likely GeoDNS/CDN load balancing - normal behavior)'
             else:
                 results['status'] = 'CONSISTENT'
                 results['message'] = 'DNS responses consistent across servers'
@@ -396,9 +410,12 @@ def display_dns_analysis(records, zone_transfer, cache_poisoning, hostname):
         print(f"\n{Fore.YELLOW}DNS Cache Poisoning Analysis:")
         status = cache_poisoning.get('status', 'Unknown')
         
-        if status == 'INCONSISTENT':
+        if status == 'SUSPICIOUS':
             print(f"{Fore.RED}  Status: {status}")
             print(f"{Fore.RED}  ⚠ {cache_poisoning.get('warning', '')}")
+        elif status == 'NORMAL_VARIATION':
+            print(f"{Fore.GREEN}  Status: {status}")
+            print(f"{Fore.GREEN}  ✓ {cache_poisoning.get('message', '')}")
         elif status == 'CONSISTENT':
             print(f"{Fore.GREEN}  Status: {status}")
             print(f"{Fore.GREEN}  ✓ {cache_poisoning.get('message', '')}")
@@ -415,6 +432,17 @@ def display_dns_analysis(records, zone_transfer, cache_poisoning, hostname):
 
 def perform_arp_scan(network_range):
     """Perform ARP scan for local network discovery"""
+    # Check for admin privileges since ARP scanning typically requires raw socket access
+    try:
+        from admin_utils import check_admin_for_tool
+        admin_result = check_admin_for_tool('arp_scan')
+        if admin_result is None:  # User chose to return to main menu
+            return None, "User cancelled - admin privileges required"
+        elif not admin_result:  # Continuing without admin
+            print(f"{Fore.YELLOW}Warning: ARP scan may not work properly without admin privileges")
+    except ImportError:
+        print(f"{Fore.YELLOW}Warning: Cannot check admin privileges")
+    
     try:
         from scapy.all import ARP, Ether, srp
         import ipaddress
@@ -452,6 +480,17 @@ def perform_arp_scan(network_range):
 
 def detect_os_fingerprint(ip_address):
     """Basic OS fingerprinting using various techniques"""
+    # Check for admin privileges for advanced fingerprinting
+    try:
+        from admin_utils import check_admin_for_tool
+        admin_result = check_admin_for_tool('os_fingerprinting')
+        if admin_result is None:  # User chose to return to main menu
+            return None, "User cancelled - admin privileges recommended"
+        elif not admin_result:  # Continuing without admin
+            print(f"{Fore.YELLOW}Warning: OS fingerprinting may be limited without admin privileges")
+    except ImportError:
+        print(f"{Fore.YELLOW}Warning: Cannot check admin privileges")
+    
     try:
         fingerprint = {
             'ip': ip_address,
