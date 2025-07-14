@@ -137,6 +137,43 @@ def import_tools():
     except Exception as e:
         print(f"{Fore.RED}Warning: Could not import proxy_checker: {e}")
     
+    # Import new modules
+    try:
+        from . import session_logger
+        tools['session_logger'] = session_logger
+    except ImportError:
+        import session_logger
+        tools['session_logger'] = session_logger
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import session_logger: {e}")
+    
+    try:
+        from . import terms_of_service
+        tools['terms_of_service'] = terms_of_service
+    except ImportError:
+        import terms_of_service
+        tools['terms_of_service'] = terms_of_service
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import terms_of_service: {e}")
+    
+    try:
+        from . import encoding_utils
+        tools['encoding_utils'] = encoding_utils
+    except ImportError:
+        import encoding_utils
+        tools['encoding_utils'] = encoding_utils
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import encoding_utils: {e}")
+    
+    try:
+        from . import proxy_manager
+        tools['proxy_manager'] = proxy_manager
+    except ImportError:
+        import proxy_manager
+        tools['proxy_manager'] = proxy_manager
+    except Exception as e:
+        print(f"{Fore.RED}Warning: Could not import proxy_manager: {e}")
+    
     return tools
 
 # ASCII Art Banner (will be generated dynamically)
@@ -151,7 +188,7 @@ def get_title_ascii(tools=None):
 {Fore.CYAN}                                ##        ##       ##   ### ##    ##  ##     ## 
 {Fore.CYAN}                                ##        ######## ##    ##  ######    #######  
 {Fore.YELLOW}                           Welcome to Pengu!
-{Fore.GREEN}                              Optimized Python Version v2.0
+{Fore.GREEN}                              Enhanced Python Version v2.1
 """
     
     # Get admin warning box if tools are available
@@ -167,7 +204,7 @@ def get_title_ascii(tools=None):
 
 help_menu = f"""
 {Fore.MAGENTA} ╔════════════════════════════════════════════════════════╗
-{Fore.MAGENTA} ║ {Fore.CYAN}Project Pengu Multi-Tool - Optimized Edition{Fore.MAGENTA}           ║
+{Fore.MAGENTA} ║ {Fore.CYAN}Project Pengu Multi-Tool - Enhanced Edition{Fore.MAGENTA}           ║
 {Fore.MAGENTA} ╠════════════════════════════════════════════════════════╣
 {Fore.MAGENTA} ║ {Fore.GREEN}help       {Fore.WHITE}. Show this help menu{Fore.MAGENTA}                        ║
 {Fore.MAGENTA} ║ {Fore.GREEN}home       {Fore.WHITE}. Return to home screen{Fore.MAGENTA}                     ║
@@ -176,10 +213,14 @@ help_menu = f"""
 {Fore.MAGENTA} ║ {Fore.GREEN}http       {Fore.WHITE}. HTTP/HTTPS connectivity test{Fore.MAGENTA}              ║
 {Fore.MAGENTA} ║ {Fore.GREEN}port       {Fore.WHITE}. Advanced port scanner{Fore.MAGENTA}                     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}subdomain  {Fore.WHITE}. Multi-threaded subdomain finder{Fore.MAGENTA}           ║
-{Fore.MAGENTA} ║ {Fore.GREEN}tracker    {Fore.WHITE}. GeoIP & WHOIS lookup{Fore.MAGENTA}                      ║
+{Fore.MAGENTA} ║ {Fore.GREEN}intel      {Fore.WHITE}. Network Intelligence (SSL•DNS•ARP•OS){Fore.MAGENTA}     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}traceroute {Fore.WHITE}. Network path tracer {Fore.YELLOW}⚠{Fore.MAGENTA}                     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}proxy      {Fore.WHITE}. Multi-protocol proxy checker{Fore.MAGENTA}              ║
+{Fore.MAGENTA} ║ {Fore.GREEN}proxymode  {Fore.WHITE}. Setup universal proxy mode{Fore.MAGENTA}               ║
+{Fore.MAGENTA} ║ {Fore.GREEN}encode     {Fore.WHITE}. Encoding/Decoding utilities{Fore.MAGENTA}              ║
 {Fore.MAGENTA} ║ {Fore.GREEN}specs      {Fore.WHITE}. System hardware information{Fore.MAGENTA}               ║
+{Fore.MAGENTA} ║ {Fore.GREEN}savelog    {Fore.WHITE}. Save session log to file{Fore.MAGENTA}                  ║
+{Fore.MAGENTA} ║ {Fore.GREEN}tos        {Fore.WHITE}. Terms of service & disclaimer{Fore.MAGENTA}             ║
 {Fore.MAGENTA} ║ {Fore.GREEN}credit     {Fore.WHITE}. Show credits{Fore.MAGENTA}                               ║
 {Fore.MAGENTA} ║ {Fore.GREEN}exit       {Fore.WHITE}. Return to main menu{Fore.MAGENTA}                       ║
 {Fore.MAGENTA} ╚════════════════════════════════════════════════════════╝
@@ -422,24 +463,37 @@ def user_inputs():
     # Import tools once at startup
     tools = import_tools()
     
+    # Initialize session logger
+    try:
+        session_logger = tools.get('session_logger')
+        if session_logger:
+            logger = session_logger.get_session_logger()
+            print(f"{Fore.GREEN}✓ Session logging enabled")
+    except Exception as e:
+        print(f"{Fore.YELLOW}Warning: Session logging not available: {e}")
+    
     commands = {
         "help": lambda: print(help_menu),
         "home": lambda: return_to_home(tools),
         "ping": lambda: run_tool('enhanced_ping', tools),
         "http": http_ping,
         "tcp": tcp_ping,
-        "tracker": lambda: run_tool('whois', tools),
+        "intel": lambda: run_tool('whois', tools),  # Enhanced intelligence module
         "port": lambda: run_tool('port_scanner', tools),
         "traceroute": lambda: run_traceroute_with_admin_check(tools),
         "subdomain": lambda: run_tool('subdomain', tools),
         "proxy": lambda: run_tool('proxy_checker', tools),
+        "proxymode": lambda: setup_proxy_mode(tools),
+        "encode": lambda: run_tool('encoding_utils', tools),
         "specs": lambda: run_tool('system_specs', tools),
+        "savelog": lambda: save_session_log(tools),
+        "tos": lambda: run_tool('terms_of_service', tools),
         "credit": lambda: print(f"""
 {Fore.GREEN} ╔════════════════════════════════════════╗
 {Fore.GREEN} ║ {Fore.MAGENTA}Pengu Multi-Tool Credits{Fore.GREEN}                   ║
-{Fore.GREEN} ║ {Fore.CYAN}Optimized Python Version v2.0{Fore.GREEN}             ║
+{Fore.GREEN} ║ {Fore.CYAN}Enhanced Python Version v2.1{Fore.GREEN}              ║
 {Fore.GREEN} ║ {Fore.MAGENTA}GitHub: https://github.com/JasonVinion{Fore.GREEN}    ║
-{Fore.GREEN} ║ {Fore.YELLOW}Enhanced with auto-dependency management{Fore.GREEN}  ║
+{Fore.GREEN} ║ {Fore.YELLOW}Enhanced with comprehensive features{Fore.GREEN}      ║
 {Fore.GREEN} ╚════════════════════════════════════════╝
                   """)
     }
@@ -451,6 +505,14 @@ def user_inputs():
             if userinput in commands:
                 commands[userinput]()
             elif userinput in ["exit", "quit"]:
+                # Finalize session before exit
+                try:
+                    if 'session_logger' in tools:
+                        logger = tools['session_logger'].get_session_logger()
+                        logger.finalize_session()
+                        print(f"{Fore.CYAN}Session log saved to: {logger.temp_log_file}")
+                except:
+                    pass
                 print(f"{Fore.GREEN}Thanks for using Pengu! Goodbye...")
                 time.sleep(1)
                 break
@@ -467,6 +529,20 @@ def user_inputs():
             break
         except Exception as e:
             print(f"{Fore.RED}Error: {e}")
+
+def setup_proxy_mode(tools):
+    """Setup universal proxy mode"""
+    if 'proxy_manager' in tools:
+        tools['proxy_manager'].setup_proxy_mode()
+    else:
+        print(f"{Fore.RED}Proxy manager not available")
+
+def save_session_log(tools):
+    """Save session log to file"""
+    if 'session_logger' in tools:
+        tools['session_logger'].show_save_log_menu()
+    else:
+        print(f"{Fore.RED}Session logger not available")
 
 def run_traceroute_with_admin_check(tools):
     """Run traceroute with admin rights check"""
