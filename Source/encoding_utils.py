@@ -36,7 +36,7 @@ def base64_operations():
 {Fore.GREEN}2. {Fore.WHITE}Decode Base64 to text
 {Fore.GREEN}3. {Fore.WHITE}Encode file to Base64
 {Fore.GREEN}4. {Fore.WHITE}Decode Base64 to file
-{Fore.GREEN}5. {Fore.WHITE}Return to main menu
+{Fore.GREEN}5. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-5): ").strip()
@@ -126,7 +126,7 @@ def url_operations():
 {Fore.YELLOW}URL Options:
 {Fore.GREEN}1. {Fore.WHITE}URL Encode text
 {Fore.GREEN}2. {Fore.WHITE}URL Decode text
-{Fore.GREEN}3. {Fore.WHITE}Return to main menu
+{Fore.GREEN}3. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-3): ").strip()
@@ -161,7 +161,7 @@ def html_operations():
 {Fore.YELLOW}HTML Options:
 {Fore.GREEN}1. {Fore.WHITE}HTML Encode text
 {Fore.GREEN}2. {Fore.WHITE}HTML Decode text
-{Fore.GREEN}3. {Fore.WHITE}Return to main menu
+{Fore.GREEN}3. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-3): ").strip()
@@ -199,7 +199,7 @@ def hash_operations():
 {Fore.GREEN}3. {Fore.WHITE}Generate SHA256 hash
 {Fore.GREEN}4. {Fore.WHITE}Generate SHA512 hash
 {Fore.GREEN}5. {Fore.WHITE}Hash file
-{Fore.GREEN}6. {Fore.WHITE}Return to main menu
+{Fore.GREEN}6. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-6): ").strip()
@@ -262,20 +262,26 @@ def hidden_character_analysis():
     """Analyze and detect hidden characters in text"""
     print(f"\n{Fore.CYAN}═══ Hidden Character Analysis ═══")
     
+    # Store last analysis for potential export (Issue 8)
+    last_analysis = None
+    last_source = None
+    
     while True:
         print(f"""
 {Fore.YELLOW}Hidden Character Options:
 {Fore.GREEN}1. {Fore.WHITE}Analyze text for hidden characters
 {Fore.GREEN}2. {Fore.WHITE}Analyze file for hidden characters
 {Fore.GREEN}3. {Fore.WHITE}Clean text (remove hidden characters)
-{Fore.GREEN}4. {Fore.WHITE}Return to main menu
+{Fore.GREEN}4. {Fore.WHITE}Export last analysis results
+{Fore.GREEN}5. {Fore.WHITE}Return to Utility Menu
 """)
         
-        choice = input(f"{Fore.YELLOW}Select option (1-4): ").strip()
+        choice = input(f"{Fore.YELLOW}Select option (1-5): ").strip()
         
         if choice == '1':
             text = input(f"{Fore.YELLOW}Enter text to analyze: ")
-            analyze_hidden_chars(text)
+            last_analysis = analyze_hidden_chars(text)
+            last_source = "Text Input"
         
         elif choice == '2':
             filename = input(f"{Fore.YELLOW}Enter file path to analyze: ").strip()
@@ -283,7 +289,8 @@ def hidden_character_analysis():
                 with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
                     text = f.read()
                 print(f"{Fore.GREEN}Analyzing file: {filename}")
-                analyze_hidden_chars(text)
+                last_analysis = analyze_hidden_chars(text)
+                last_source = f"File: {filename}"
             except Exception as e:
                 print(f"{Fore.RED}Error reading file: {e}")
         
@@ -303,9 +310,15 @@ def hidden_character_analysis():
                     print(f"{Fore.RED}Error saving file: {e}")
         
         elif choice == '4':
+            if last_analysis:
+                export_hidden_char_analysis(last_analysis, last_source)
+            else:
+                print(f"{Fore.RED}No analysis results available to export. Please run an analysis first.")
+        
+        elif choice == '5':
             break
         else:
-            print(f"{Fore.RED}Invalid option. Please select 1-4.")
+            print(f"{Fore.RED}Invalid option. Please select 1-5.")
 
 def analyze_hidden_chars(text):
     """Analyze text for hidden and suspicious characters"""
@@ -368,6 +381,139 @@ def analyze_hidden_chars(text):
     
     print(f"\n{Fore.CYAN}Character Categories:")
     for category, count in sorted(char_counts.items()):
+        category_name = {
+            'Ll': 'Lowercase Letters',
+            'Lu': 'Uppercase Letters',
+            'Lt': 'Titlecase Letters',
+            'Nd': 'Decimal Numbers',
+            'Nl': 'Letter Numbers',
+            'No': 'Other Numbers',
+            'Pc': 'Connector Punctuation',
+            'Pd': 'Dash Punctuation',
+            'Pe': 'Close Punctuation',
+            'Pf': 'Final Punctuation',
+            'Pi': 'Initial Punctuation',
+            'Po': 'Other Punctuation',
+            'Ps': 'Open Punctuation',
+            'Sc': 'Currency Symbols',
+            'Sk': 'Modifier Symbols',
+            'Sm': 'Math Symbols',
+            'So': 'Other Symbols',
+            'Zl': 'Line Separators',
+            'Zp': 'Paragraph Separators',
+            'Zs': 'Space Separators',
+            'Cc': 'Control Characters',
+            'Cf': 'Format Characters',
+            'Cn': 'Unassigned',
+            'Co': 'Private Use',
+            'Cs': 'Surrogate'
+        }.get(category, category)
+        
+        color = Fore.RED if category.startswith('C') else Fore.WHITE
+        print(f"  {Fore.CYAN}{category_name}: {color}{count}")
+    
+    # Return analysis data for potential export (Issue 8)
+    return {
+        'text_length': len(text),
+        'suspicious_chars': suspicious_chars,
+        'char_counts': char_counts,
+        'original_text': text
+    }
+
+def export_hidden_char_analysis(analysis_data, source_description="Text Input"):
+    """Export hidden character analysis results to file (Issue 8)"""
+    try:
+        from datetime import datetime
+        import os
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"hidden_char_analysis_{timestamp}.txt"
+        
+        # Use new output directory structure
+        try:
+            from pengu import get_output_path
+            full_path = get_output_path("reports", filename)
+        except:
+            # Fallback if import fails
+            full_path = filename
+        
+        content = f"""Hidden Character Analysis Report
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Source: {source_description}
+{'='*60}
+
+ANALYSIS SUMMARY
+Text Length: {analysis_data['text_length']} characters
+Suspicious Characters Found: {len(analysis_data['suspicious_chars'])}
+
+"""
+        
+        if analysis_data['suspicious_chars']:
+            content += "SUSPICIOUS CHARACTERS DETECTED:\n"
+            content += "-" * 40 + "\n"
+            for char_info in analysis_data['suspicious_chars']:
+                content += f"Position {char_info['position']:4d}: {char_info['name']} ({char_info['unicode']})\n"
+        else:
+            content += "✓ No suspicious hidden characters found\n"
+        
+        content += f"\nCHARACTER CATEGORIES:\n"
+        content += "-" * 40 + "\n"
+        
+        category_names = {
+            'Ll': 'Lowercase Letters',
+            'Lu': 'Uppercase Letters',
+            'Lt': 'Titlecase Letters',
+            'Nd': 'Decimal Numbers',
+            'Nl': 'Letter Numbers',
+            'No': 'Other Numbers',
+            'Pc': 'Connector Punctuation',
+            'Pd': 'Dash Punctuation',
+            'Pe': 'Close Punctuation',
+            'Pf': 'Final Punctuation',
+            'Pi': 'Initial Punctuation',
+            'Po': 'Other Punctuation',
+            'Ps': 'Open Punctuation',
+            'Sc': 'Currency Symbols',
+            'Sk': 'Modifier Symbols',
+            'Sm': 'Math Symbols',
+            'So': 'Other Symbols',
+            'Zl': 'Line Separators',
+            'Zp': 'Paragraph Separators',
+            'Zs': 'Space Separators',
+            'Cc': 'Control Characters',
+            'Cf': 'Format Characters',
+            'Cn': 'Unassigned',
+            'Co': 'Private Use',
+            'Cs': 'Surrogate'
+        }
+        
+        for category, count in sorted(analysis_data['char_counts'].items()):
+            category_name = category_names.get(category, category)
+            warning = " ⚠" if category.startswith('C') else ""
+            content += f"{category_name:25}: {count:6d}{warning}\n"
+        
+        content += f"\nRECOMMENDATIONS:\n"
+        content += "-" * 40 + "\n"
+        if analysis_data['suspicious_chars']:
+            content += "• Review the detected suspicious characters\n"
+            content += "• Consider using the 'Clean text' option to remove problematic characters\n"
+            content += "• Be cautious of potential data exfiltration or steganographic content\n"
+        else:
+            content += "• No immediate concerns with hidden characters\n"
+            content += "• Text appears to be clean of problematic Unicode characters\n"
+        
+        content += f"\nReport generated by Pengu v2.1 Hidden Character Analysis\n"
+        
+        # Write with UTF-8 encoding
+        with open(full_path, 'w', encoding='utf-8', errors='replace') as f:
+            f.write(content)
+        
+        print(f"{Fore.GREEN}✓ Hidden character analysis exported to: {full_path}")
+        return True
+        
+    except Exception as e:
+        print(f"{Fore.RED}Error exporting analysis: {e}")
+        return False
         category_name = {
             'Ll': 'Lowercase Letters',
             'Lu': 'Uppercase Letters',

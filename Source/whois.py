@@ -30,28 +30,107 @@ def print_banner():
     print(message)
 
 def get_ssl_certificate_info(hostname, port=443):
-    """Get SSL certificate information including validity and chain"""
-    try:
-        # Create SSL context
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        # Connect and get certificate
-        with socket.create_connection((hostname, port), timeout=10) as sock:
-            with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                cert = ssock.getpeercert(binary_form=False)
-                cert_der = ssock.getpeercert(binary_form=True)
-                cipher = ssock.cipher()
-                protocol = ssock.version()
-                
-        if cert:
-            return analyze_certificate(cert, cert_der, cipher, protocol, hostname)
-        else:
-            return None, "No certificate found"
+    """Get SSL certificate information with improved error handling (Issue 15)"""
+    import socket
+    import ssl
+    from urllib.parse import urlparse
+    
+    # Clean hostname if URL was provided
+    if hostname.startswith(('http://', 'https://')):
+        parsed = urlparse(hostname)
+        hostname = parsed.hostname or parsed.netloc.split(':')[0]
+    
+    # Remove any port specification from hostname
+    if ':' in hostname and not hostname.startswith('['):  # Not IPv6
+        hostname = hostname.split(':')[0]
+    
+    print(f"{Fore.CYAN}Attempting SSL connection to {hostname}:{port}...")
+    
+    # Try multiple connection approaches (Issue 15)
+    connection_attempts = [
+        {'timeout': 15, 'context_type': 'default'},
+        {'timeout': 30, 'context_type': 'unverified'},
+        {'timeout': 45, 'context_type': 'minimal'}
+    ]
+    
+    for attempt_num, attempt_config in enumerate(connection_attempts, 1):
+        try:
+            print(f"{Fore.YELLOW}Connection attempt {attempt_num}/3 (timeout: {attempt_config['timeout']}s)...")
             
-    except Exception as e:
-        return None, f"SSL connection error: {str(e)}"
+            # Create appropriate SSL context based on attempt type
+            if attempt_config['context_type'] == 'default':
+                context = ssl.create_default_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            elif attempt_config['context_type'] == 'unverified':
+                context = ssl._create_unverified_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            else:  # minimal
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                context.set_ciphers('ALL:@SECLEVEL=0')
+            
+            # First, test basic connectivity to the port
+            try:
+                test_sock = socket.create_connection((hostname, port), timeout=attempt_config['timeout'])
+                test_sock.close()
+                print(f"{Fore.GREEN}Port {port} is open on {hostname}")
+            except socket.timeout:
+                print(f"{Fore.RED}Connection timeout to {hostname}:{port}")
+                continue
+            except ConnectionRefusedError:
+                print(f"{Fore.RED}Connection refused to {hostname}:{port}")
+                continue
+            except Exception as e:
+                print(f"{Fore.RED}Connection test failed: {e}")
+                continue
+            
+            # Now attempt SSL connection
+            with socket.create_connection((hostname, port), timeout=attempt_config['timeout']) as sock:
+                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    cert = ssock.getpeercert(binary_form=False)
+                    cert_der = ssock.getpeercert(binary_form=True)
+                    cipher = ssock.cipher()
+                    protocol = ssock.version()
+                    
+                    print(f"{Fore.GREEN}SSL connection successful!")
+                    print(f"{Fore.CYAN}Protocol: {protocol}")
+                    print(f"{Fore.CYAN}Cipher: {cipher[0] if cipher else 'Unknown'}")
+                    
+                    if cert:
+                        return analyze_certificate(cert, cert_der, cipher, protocol, hostname)
+                    else:
+                        return None, "No certificate found in SSL handshake"
+                        
+        except socket.timeout:
+            print(f"{Fore.RED}Attempt {attempt_num}: Connection timeout after {attempt_config['timeout']}s")
+            continue
+        except ssl.SSLError as e:
+            print(f"{Fore.RED}Attempt {attempt_num}: SSL error - {str(e)}")
+            continue
+        except ConnectionRefusedError:
+            print(f"{Fore.RED}Attempt {attempt_num}: Connection refused")
+            continue
+        except Exception as e:
+            print(f"{Fore.RED}Attempt {attempt_num}: Connection error - {str(e)}")
+            continue
+    
+    # All attempts failed
+    error_msg = f"All SSL connection attempts failed for {hostname}:{port}"
+    suggestions = [
+        f"• Verify {hostname} supports HTTPS on port {port}",
+        "• Check if the service is running and accessible",
+        "• Try with a different port (like 8443 for alternate HTTPS)",
+        "• Ensure no firewall is blocking the connection"
+    ]
+    
+    print(f"{Fore.RED}{error_msg}")
+    for suggestion in suggestions:
+        print(f"{Fore.YELLOW}{suggestion}")
+    
+    return None, error_msg
 
 def analyze_certificate(cert, cert_der, cipher, protocol, hostname):
     """Analyze SSL certificate for security issues"""
@@ -431,7 +510,10 @@ def display_dns_analysis(records, zone_transfer, cache_poisoning, hostname):
                 print(f"{Fore.CYAN}    {server}: {Fore.YELLOW}{ips}")
 
 def perform_arp_scan(network_range):
-    """Perform ARP scan for local network discovery"""
+    """Perform ARP scan for local network discovery with Windows compatibility (Issue 14)"""
+    import platform
+    import subprocess
+    
     # Check for admin privileges since ARP scanning typically requires raw socket access
     try:
         from admin_utils import check_admin_for_tool
@@ -443,9 +525,44 @@ def perform_arp_scan(network_range):
     except ImportError:
         print(f"{Fore.YELLOW}Warning: Cannot check admin privileges")
     
+    # Handle Windows raw socket limitations (Issue 14)
+    if platform.system() == "Windows":
+        try:
+            # Try to use native Windows ARP command first
+            print(f"{Fore.CYAN}Using Windows ARP table for network discovery...")
+            result = subprocess.run(['arp', '-a'], capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                devices = []
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if 'dynamic' in line.lower() or 'static' in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            ip = parts[0].strip()
+                            mac = parts[1].strip()
+                            if ip and mac and '-' in mac:
+                                devices.append({'ip': ip, 'mac': mac})
+                if devices:
+                    return devices, "success (Windows ARP table)"
+        except Exception as e:
+            print(f"{Fore.YELLOW}Windows ARP table scan failed: {e}")
+    
+    # Try Scapy with Windows compatibility checks (Issue 14)
     try:
         from scapy.all import ARP, Ether, srp
         import ipaddress
+        
+        # Windows-specific Scapy checks
+        if platform.system() == "Windows":
+            try:
+                # Check if Npcap is available
+                from scapy.arch.windows import get_windows_if_list
+                interfaces = get_windows_if_list()
+                if not interfaces:
+                    return None, "No network interfaces available. Please install Npcap or WinPcap"
+                print(f"{Fore.GREEN}Npcap/WinPcap detected - proceeding with Scapy scan")
+            except Exception as e:
+                return None, f"Windows network driver issue: {e}. Please install Npcap"
         
         # Validate network range
         try:
@@ -455,13 +572,16 @@ def perform_arp_scan(network_range):
         
         print(f"{Fore.CYAN}Scanning network: {network}")
         
-        # Create ARP request
+        # Create ARP request with Windows-compatible timeout
         arp_request = ARP(pdst=str(network))
         broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
         arp_request_broadcast = broadcast / arp_request
         
+        # Use longer timeout on Windows
+        timeout_val = 5 if platform.system() == "Windows" else 2
+        
         # Send packets and receive responses
-        answered_list = srp(arp_request_broadcast, timeout=2, verbose=False)[0]
+        answered_list = srp(arp_request_broadcast, timeout=timeout_val, verbose=False)[0]
         
         devices = []
         for element in answered_list:
@@ -474,9 +594,20 @@ def perform_arp_scan(network_range):
         return devices, "success"
         
     except ImportError:
-        return None, "Scapy module not available"
+        error_msg = "Scapy module not available"
+        if platform.system() == "Windows":
+            error_msg += ". For Windows, please install Npcap from https://nmap.org/npcap/"
+        return None, error_msg
+    except PermissionError:
+        error_msg = "Permission denied - raw socket access requires administrator privileges"
+        if platform.system() == "Windows":
+            error_msg += ". Please run as Administrator and ensure Npcap is installed"
+        return None, error_msg
     except Exception as e:
-        return None, f"ARP scan error: {str(e)}"
+        error_msg = f"ARP scan error: {str(e)}"
+        if platform.system() == "Windows" and "raw socket" in str(e).lower():
+            error_msg += ". Please install Npcap and run as Administrator"
+        return None, error_msg
 
 def detect_os_fingerprint(ip_address):
     """Basic OS fingerprinting using various techniques"""
@@ -873,52 +1004,78 @@ def display_geoip_results(data, source):
             print(f"{Fore.CYAN}{label:15}: {Fore.WHITE}{value}")
 
 def display_whois_results(data, source):
-    """Display WHOIS results in a formatted way"""
+    """Display WHOIS results in a formatted way (Enhanced for Issue 11)"""
     print(f"\n{Fore.GREEN}╔══════════════════════════════════════╗")
     print(f"{Fore.GREEN}║ {Fore.CYAN}WHOIS Information (Source: {source}){Fore.GREEN}")
     print(f"{Fore.GREEN}╚══════════════════════════════════════╝")
     
-    if source == "ARIN":
-        # Handle ARIN format
-        whois_net = data.get('net', {})
+    # Handle raw dictionary/JSON data by extracting meaningful fields
+    if isinstance(data, dict):
+        if source == "ARIN":
+            # Handle ARIN format
+            whois_net = data.get('net', {})
+            
+            # Try to extract ASN from ARIN data
+            asn_info = "N/A"
+            org_ref = whois_net.get('orgRef', {})
+            if org_ref and '@handle' in org_ref:
+                org_handle = org_ref.get('@handle', '')
+                # ASN often appears in organization handles
+                asn_match = re.search(r'AS(\d+)', org_handle)
+                if asn_match:
+                    asn_info = f"AS{asn_match.group(1)}"
+            
+            # Helper function to safely extract nested values
+            def safe_extract(obj, default='N/A'):
+                if isinstance(obj, dict):
+                    if '$' in obj:
+                        return obj['$']
+                    elif 'value' in obj:
+                        return obj['value']
+                    elif '@name' in obj:
+                        return obj['@name']
+                    elif 'text' in obj:
+                        return obj['text']
+                    elif len(obj) == 1:
+                        # If single key-value pair, return the value
+                        return list(obj.values())[0]
+                return str(obj) if obj else default
+            
+            fields = [
+                ('Network Name', safe_extract(whois_net.get('name'))),
+                ('Handle', safe_extract(whois_net.get('handle'))),
+                ('Start Address', safe_extract(whois_net.get('startAddress'))),
+                ('End Address', safe_extract(whois_net.get('endAddress'))),
+                ('CIDR', safe_extract(whois_net.get('cidr'))),
+                ('ASN', asn_info),
+                ('Parent Network', org_ref.get('@name', 'N/A')),
+                ('Organization', org_ref.get('@name', 'N/A')),
+                ('Registration Date', safe_extract(whois_net.get('registrationDate'))),
+                ('Last Updated', safe_extract(whois_net.get('updateDate')))
+            ]
+        else:
+            # Handle ipwhois.app format and other sources
+            fields = [
+                ('Network', data.get('net', 'N/A')),
+                ('CIDR', data.get('cidr', 'N/A')),
+                ('Organization', data.get('org', 'N/A')),
+                ('ISP', data.get('isp', 'N/A')),
+                ('Country', data.get('country', 'N/A')),
+                ('Region', data.get('region', 'N/A')),
+                ('ASN', f"{data.get('asn', 'N/A')} - {data.get('asn_org', 'N/A')}")
+            ]
         
-        # Try to extract ASN from ARIN data
-        asn_info = "N/A"
-        org_ref = whois_net.get('orgRef', {})
-        if org_ref and '@handle' in org_ref:
-            org_handle = org_ref.get('@handle', '')
-            # ASN often appears in organization handles
-            asn_match = re.search(r'AS(\d+)', org_handle)
-            if asn_match:
-                asn_info = f"AS{asn_match.group(1)}"
-        
-        fields = [
-            ('Network Name', whois_net.get('name', {}).get('$', 'N/A')),
-            ('Handle', whois_net.get('handle', {}).get('$', 'N/A')),
-            ('Start Address', whois_net.get('startAddress', {}).get('$', 'N/A')),
-            ('End Address', whois_net.get('endAddress', {}).get('$', 'N/A')),
-            ('CIDR', whois_net.get('cidr', 'N/A')),
-            ('ASN', asn_info),
-            ('Parent Network', whois_net.get('parentNetRef', {}).get('@name', 'N/A')),
-            ('Organization', whois_net.get('orgRef', {}).get('@name', 'N/A')),
-            ('Registration Date', whois_net.get('registrationDate', 'N/A')),
-            ('Last Updated', whois_net.get('updateDate', {}).get('$', 'N/A'))
-        ]
+        # Display formatted fields
+        for label, value in fields:
+            if value and value != 'N/A' and str(value).strip():
+                # Clean up value - remove XML/JSON artifacts
+                clean_value = str(value).replace('@xmlns', '').replace('$:', '').strip()
+                if clean_value and clean_value != 'N/A':
+                    print(f"{Fore.CYAN}{label:15}: {Fore.WHITE}{clean_value}")
     else:
-        # Handle ipwhois.app format
-        fields = [
-            ('Network', data.get('net', 'N/A')),
-            ('CIDR', data.get('cidr', 'N/A')),
-            ('Organization', data.get('org', 'N/A')),
-            ('ISP', data.get('isp', 'N/A')),
-            ('Country', data.get('country', 'N/A')),
-            ('Region', data.get('region', 'N/A')),
-            ('ASN', f"{data.get('asn', 'N/A')} - {data.get('asn_org', 'N/A')}")
-        ]
-    
-    for label, value in fields:
-        if value and value != 'N/A':
-            print(f"{Fore.CYAN}{label:15}: {Fore.WHITE}{value}")
+        # Fallback for non-dictionary data
+        print(f"{Fore.YELLOW}Raw data: {Fore.WHITE}{str(data)[:200]}...")
+        print(f"{Fore.RED}Warning: Unexpected data format received from {source}")
 
 def main():
     """Main function with enhanced network intelligence capabilities"""
@@ -1241,7 +1398,7 @@ def perform_complete_intelligence(target):
     analysis_results = {}
     
     # 1. Standard lookup
-    print(f"\n{Fore.MAGENTA}[1/4] Standard GeoIP & WHOIS Lookup{Fore.MAGENTA}")
+    print(f"\n{Fore.MAGENTA}[1/4] Standard GeoIP & WHOIS Lookup... {Fore.CYAN}[Starting]")
     geoip_result, _ = get_geoip_info(ip_address)
     whois_result, _ = get_basic_whois_info(ip_address)
     
@@ -1251,21 +1408,25 @@ def perform_complete_intelligence(target):
     if whois_result:
         display_whois_results(whois_result, "Complete Analysis")
         analysis_results['whois'] = True
+    print(f"{Fore.GREEN}[1/4] Standard GeoIP & WHOIS Lookup... [Completed]")
     
     # 2. SSL Analysis (if hostname provided)
     if not validate_ip(target):
-        print(f"\n{Fore.MAGENTA}[2/4] SSL/TLS Certificate Analysis{Fore.MAGENTA}")
+        print(f"\n{Fore.MAGENTA}[2/4] SSL/TLS Certificate Analysis... {Fore.CYAN}[Starting]")
         ssl_analysis, ssl_status = get_ssl_certificate_info(hostname, 443)
         if ssl_analysis:
             display_ssl_analysis(ssl_analysis, hostname, 443)
             analysis_results['ssl'] = True
+            print(f"{Fore.GREEN}[2/4] SSL/TLS Certificate Analysis... [Completed]")
         else:
-            print(f"{Fore.YELLOW}SSL analysis skipped: {ssl_status}")
+            print(f"{Fore.YELLOW}[2/4] SSL/TLS Certificate Analysis... [Skipped: {ssl_status}]")
             print(f"{Fore.YELLOW}Possible reasons: Port 443 not open, no SSL service, or connection timeout")
+    else:
+        print(f"\n{Fore.YELLOW}[2/4] SSL/TLS Certificate Analysis... [Skipped: Target is IP address only]")
     
     # 3. DNS Intelligence (if hostname provided)
     if not validate_ip(target):
-        print(f"\n{Fore.MAGENTA}[3/4] DNS Intelligence{Fore.MAGENTA}")
+        print(f"\n{Fore.MAGENTA}[3/4] Comprehensive DNS Intelligence... {Fore.CYAN}[Starting]")
         dns_records, _ = get_comprehensive_dns_records(hostname)
         zone_transfer, _ = attempt_dns_zone_transfer(hostname)
         cache_poisoning, _ = detect_dns_cache_poisoning(hostname)
@@ -1273,15 +1434,23 @@ def perform_complete_intelligence(target):
         if dns_records or zone_transfer or cache_poisoning:
             display_dns_analysis(dns_records, zone_transfer, cache_poisoning, hostname)
             analysis_results['dns'] = True
+            print(f"{Fore.GREEN}[3/4] Comprehensive DNS Intelligence... [Completed]")
+        else:
+            print(f"{Fore.YELLOW}[3/4] Comprehensive DNS Intelligence... [Failed: No DNS data available]")
+    else:
+        print(f"\n{Fore.YELLOW}[3/4] Comprehensive DNS Intelligence... [Skipped: Target is IP address only]")
     
     # 4. Network Discovery
-    print(f"\n{Fore.MAGENTA}[4/4] Network Discovery{Fore.MAGENTA}")
+    print(f"\n{Fore.MAGENTA}[4/4] Network Discovery... {Fore.CYAN}[Starting]")
     os_fingerprint, _ = detect_os_fingerprint(ip_address)
     services, _ = detect_service_versions(ip_address)
     
     if os_fingerprint or services:
         display_network_discovery(None, os_fingerprint, services, ip_address)
         analysis_results['network_discovery'] = True
+        print(f"{Fore.GREEN}[4/4] Network Discovery... [Completed]")
+    else:
+        print(f"{Fore.YELLOW}[4/4] Network Discovery... [Limited: Partial data available]")
     
     # Summary
     duration = time.time() - start_time

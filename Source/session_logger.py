@@ -12,129 +12,158 @@ from colorama import init, Fore, Style
 init(autoreset=True)
 
 class SessionLogger:
-    """Session logger to track all tool usage during a session"""
+    """Enhanced session logger with real-time logging and dedicated output directory (Issue 10)"""
     
     def __init__(self):
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.temp_dir = tempfile.gettempdir()
-        self.temp_log_file = os.path.join(self.temp_dir, f"pengu_session_{self.session_id}.json")
+        
+        # Use dedicated output directory structure (Issue 10)
+        self.output_dir = "pengu_output"
+        self.logs_dir = os.path.join(self.output_dir, "logs")
+        
+        # Create output directories if they don't exist
+        os.makedirs(self.logs_dir, exist_ok=True)
+        
+        # Real-time log file in dedicated directory
+        self.log_file = os.path.join(self.logs_dir, f"session_{self.session_id}.log")
+        
         self.session_data = {
             "session_id": self.session_id,
             "start_time": datetime.now().isoformat(),
+            "commands_executed": [],
             "tools_used": [],
+            "reports_generated": [],
             "session_summary": {
+                "total_commands": 0,
                 "total_tools_run": 0,
                 "unique_tools": set(),
                 "total_duration": 0
             }
         }
-        self._create_temp_log()
+        self._initialize_log_file()
     
-    def _create_temp_log(self):
-        """Create initial temporary log file"""
+    def _initialize_log_file(self):
+        """Initialize log file with session start information (Issue 10)"""
         try:
-            with open(self.temp_log_file, 'w') as f:
-                # Convert set to list for JSON serialization
-                data_copy = self.session_data.copy()
-                data_copy["session_summary"]["unique_tools"] = list(data_copy["session_summary"]["unique_tools"])
-                json.dump(data_copy, f, indent=2)
+            with open(self.log_file, 'w', encoding='utf-8') as f:
+                f.write(f"PENGU SESSION LOG\n")
+                f.write(f"{'=' * 50}\n")
+                f.write(f"Session ID: {self.session_id}\n")
+                f.write(f"Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Log File: {self.log_file}\n")
+                f.write(f"{'=' * 50}\n\n")
         except Exception as e:
-            print(f"{Fore.YELLOW}Warning: Could not create session log: {e}")
+            print(f"{Fore.YELLOW}Warning: Could not initialize session log: {e}")
+    
+    def log_command(self, command, output=None):
+        """Log user commands in real-time (Issue 10)"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] COMMAND: {command}\n")
+                if output:
+                    f.write(f"[{timestamp}] OUTPUT: {output}\n")
+                f.write(f"{'-' * 30}\n")
+            
+            # Update session data
+            self.session_data["commands_executed"].append({
+                "timestamp": timestamp,
+                "command": command,
+                "output": output if output else "No output captured"
+            })
+            self.session_data["session_summary"]["total_commands"] += 1
+            
+        except Exception as e:
+            print(f"{Fore.YELLOW}Warning: Could not log command: {e}")
     
     def log_tool_usage(self, tool_name, details):
-        """Log tool usage with important details"""
-        timestamp = datetime.now().isoformat()
-        tool_entry = {
-            "tool": tool_name,
-            "timestamp": timestamp,
-            "details": details
-        }
-        
-        self.session_data["tools_used"].append(tool_entry)
-        self.session_data["session_summary"]["total_tools_run"] += 1
-        
-        # Ensure unique_tools is a set
-        if isinstance(self.session_data["session_summary"]["unique_tools"], list):
-            self.session_data["session_summary"]["unique_tools"] = set(self.session_data["session_summary"]["unique_tools"])
-        
-        self.session_data["session_summary"]["unique_tools"].add(tool_name)
-        
-        # Update temp log
-        self._update_temp_log()
-    
-    def _update_temp_log(self):
-        """Update the temporary log file"""
+        """Log tool usage with comprehensive details in real-time (Issue 10)"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            # Convert set to list for JSON serialization
-            data_copy = self.session_data.copy()
-            data_copy["session_summary"]["unique_tools"] = list(data_copy["session_summary"]["unique_tools"])
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] TOOL: {tool_name}\n")
+                f.write(f"[{timestamp}] DETAILS: {details}\n")
+                f.write(f"{'-' * 30}\n")
             
-            with open(self.temp_log_file, 'w') as f:
-                json.dump(data_copy, f, indent=2)
+            # Update session data
+            tool_entry = {
+                "tool": tool_name,
+                "timestamp": timestamp,
+                "details": details
+            }
+            
+            self.session_data["tools_used"].append(tool_entry)
+            self.session_data["session_summary"]["total_tools_run"] += 1
+            self.session_data["session_summary"]["unique_tools"].add(tool_name)
+            
         except Exception as e:
-            print(f"{Fore.YELLOW}Warning: Could not update session log: {e}")
+            print(f"{Fore.YELLOW}Warning: Could not log tool usage: {e}")
+    
+    def log_report_generation(self, report_type, report_path, content_summary=None):
+        """Log report generation in real-time (Issue 10)"""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] REPORT GENERATED: {report_type}\n")
+                f.write(f"[{timestamp}] REPORT PATH: {report_path}\n")
+                if content_summary:
+                    f.write(f"[{timestamp}] CONTENT SUMMARY: {content_summary}\n")
+                f.write(f"{'-' * 30}\n")
+            
+            # Update session data
+            self.session_data["reports_generated"].append({
+                "timestamp": timestamp,
+                "report_type": report_type,
+                "report_path": report_path,
+                "content_summary": content_summary or "No summary provided"
+            })
+            
+        except Exception as e:
+            print(f"{Fore.YELLOW}Warning: Could not log report generation: {e}")
     
     def finalize_session(self):
-        """Finalize session with end time"""
-        self.session_data["end_time"] = datetime.now().isoformat()
-        start_time = datetime.fromisoformat(self.session_data["start_time"])
-        end_time = datetime.fromisoformat(self.session_data["end_time"])
-        self.session_data["session_summary"]["total_duration"] = (end_time - start_time).total_seconds()
-        self._update_temp_log()
-    
-    def save_session_log(self, custom_title=None):
-        """Save session log permanently with user-specified title"""
+        """Finalize session with end time and summary (Issue 10)"""
         try:
-            # Finalize session
-            self.finalize_session()
+            end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(f"\n{'=' * 50}\n")
+                f.write(f"SESSION ENDED: {end_time}\n")
+                f.write(f"TOTAL COMMANDS: {self.session_data['session_summary']['total_commands']}\n")
+                f.write(f"TOTAL TOOLS USED: {self.session_data['session_summary']['total_tools_run']}\n")
+                f.write(f"UNIQUE TOOLS: {len(self.session_data['session_summary']['unique_tools'])}\n")
+                f.write(f"REPORTS GENERATED: {len(self.session_data['reports_generated'])}\n")
+                f.write(f"{'=' * 50}\n")
             
-            # Create filename
-            date_part = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-            if custom_title:
-                # Sanitize title for filename
-                safe_title = "".join(c for c in custom_title if c.isalnum() or c in " -_").strip()
-                safe_title = safe_title.replace(" ", "_")
-                filename = f"{date_part}_{safe_title}_pengu_session.json"
-            else:
-                filename = f"{date_part}_pengu_session.json"
-            
-            # Save to current directory
-            permanent_file = os.path.join(os.getcwd(), filename)
-            
-            # Convert set to list for JSON serialization
-            data_copy = self.session_data.copy()
-            data_copy["session_summary"]["unique_tools"] = list(data_copy["session_summary"]["unique_tools"])
-            
-            with open(permanent_file, 'w') as f:
-                json.dump(data_copy, f, indent=2)
-            
-            print(f"{Fore.GREEN}✓ Session log saved as: {permanent_file}")
-            return permanent_file
+            return self.log_file
             
         except Exception as e:
-            print(f"{Fore.RED}Error saving session log: {e}")
+            print(f"{Fore.YELLOW}Warning: Could not finalize session log: {e}")
             return None
-    
-    def get_session_summary(self):
-        """Get current session summary"""
-        unique_tools = list(self.session_data["session_summary"]["unique_tools"])
-        return {
-            "session_id": self.session_id,
-            "tools_run": self.session_data["session_summary"]["total_tools_run"],
-            "unique_tools": unique_tools,
-            "temp_log_location": self.temp_log_file
-        }
-    
-    def cleanup_temp_log(self):
-        """Clean up temporary log file"""
-        try:
-            if os.path.exists(self.temp_log_file):
-                os.remove(self.temp_log_file)
-        except Exception as e:
-            print(f"{Fore.YELLOW}Warning: Could not clean up temp log: {e}")
 
 # Global session logger instance
 session_logger = None
+
+def get_session_logger():
+    """Get or create global session logger instance"""
+    global session_logger
+    if session_logger is None:
+        session_logger = SessionLogger()
+    return session_logger
+
+def log_tool_usage(tool_name, details):
+    """Global function to log tool usage"""
+    logger = get_session_logger()
+    logger.log_tool_usage(tool_name, details)
+
+def log_command(command, output=None):
+    """Global function to log commands"""
+    logger = get_session_logger()
+    logger.log_command(command, output)
+
+def log_report_generation(report_type, report_path, content_summary=None):
+    """Global function to log report generation"""
+    logger = get_session_logger()
+    logger.log_report_generation(report_type, report_path, content_summary)
 
 def get_session_logger():
     """Get or create global session logger"""
