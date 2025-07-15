@@ -202,7 +202,23 @@ def get_title_ascii(tools=None):
         except:
             return base_ascii + f"\n{Fore.YELLOW}Type 'help' to get started.\n"
 
-help_menu = f"""
+def get_help_menu(tools=None):
+    """Generate help menu with conditional admin warnings"""
+    # Check admin status
+    is_admin = False
+    if tools and 'admin_utils' in tools:
+        is_admin = tools['admin_utils'].is_admin()
+    else:
+        try:
+            import admin_utils
+            is_admin = admin_utils.is_admin()
+        except:
+            pass
+    
+    # Conditional warning for traceroute
+    traceroute_warning = "" if is_admin else f" {Fore.YELLOW}⚠"
+    
+    return f"""
 {Fore.MAGENTA} ╔════════════════════════════════════════════════════════╗
 {Fore.MAGENTA} ║ {Fore.CYAN}Project Pengu Multi-Tool - Enhanced Edition{Fore.MAGENTA}           ║
 {Fore.MAGENTA} ╠════════════════════════════════════════════════════════╣
@@ -214,7 +230,7 @@ help_menu = f"""
 {Fore.MAGENTA} ║ {Fore.GREEN}port       {Fore.WHITE}. Advanced port scanner{Fore.MAGENTA}                     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}subdomain  {Fore.WHITE}. Multi-threaded subdomain finder{Fore.MAGENTA}           ║
 {Fore.MAGENTA} ║ {Fore.GREEN}intel      {Fore.WHITE}. Network Intelligence (SSL•DNS•ARP•OS){Fore.MAGENTA}     ║
-{Fore.MAGENTA} ║ {Fore.GREEN}traceroute {Fore.WHITE}. Network path tracer {Fore.YELLOW}⚠{Fore.MAGENTA}                     ║
+{Fore.MAGENTA} ║ {Fore.GREEN}traceroute {Fore.WHITE}. Network path tracer{traceroute_warning}{Fore.MAGENTA}                     ║
 {Fore.MAGENTA} ║ {Fore.GREEN}proxy      {Fore.WHITE}. Multi-protocol proxy checker{Fore.MAGENTA}              ║
 {Fore.MAGENTA} ║ {Fore.GREEN}proxymode  {Fore.WHITE}. Setup universal proxy mode{Fore.MAGENTA}               ║
 {Fore.MAGENTA} ║ {Fore.GREEN}encode     {Fore.WHITE}. Encoding/Decoding utilities{Fore.MAGENTA}              ║
@@ -230,6 +246,71 @@ help_menu = f"""
 def clear_screen():
     """Clear screen in a cross-platform way"""
     os.system('cls' if os.name == 'nt' else 'clear')
+
+def create_output_directories():
+    """Create dedicated output directories (Issue 4)"""
+    try:
+        # Get the directory where the script is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_output_dir = os.path.join(script_dir, "pengu_output")
+        
+        # Create subdirectories
+        directories = [
+            base_output_dir,
+            os.path.join(base_output_dir, "reports"),
+            os.path.join(base_output_dir, "logs"),
+            os.path.join(base_output_dir, "exports")
+        ]
+        
+        for directory in directories:
+            os.makedirs(directory, exist_ok=True)
+            
+        return base_output_dir
+    except Exception as e:
+        print(f"{Fore.YELLOW}Warning: Could not create output directories: {e}")
+        return os.path.dirname(os.path.abspath(__file__))  # Fallback to script directory
+
+def get_output_path(subfolder="", filename=""):
+    """Get the path for output files in the appropriate subdirectory"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.join(script_dir, "pengu_output")
+        
+        if subfolder:
+            output_dir = os.path.join(base_dir, subfolder)
+        else:
+            output_dir = base_dir
+            
+        if filename:
+            return os.path.join(output_dir, filename)
+        else:
+            return output_dir
+    except:
+        # Fallback to script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if filename:
+            return os.path.join(script_dir, filename)
+        else:
+            return script_dir
+
+def safe_write_file(filepath, content, mode='w'):
+    """Write file with UTF-8 encoding to fix Issue 16"""
+    try:
+        with open(filepath, mode, encoding='utf-8', errors='replace') as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        print(f"{Fore.RED}Error writing file {filepath}: {e}")
+        return False
+
+def safe_read_file(filepath, mode='r'):
+    """Read file with UTF-8 encoding"""
+    try:
+        with open(filepath, mode, encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except Exception as e:
+        print(f"{Fore.RED}Error reading file {filepath}: {e}")
+        return None
 
 def return_to_home(tools=None):
     """Clear screen and show banner"""
@@ -695,7 +776,7 @@ def user_inputs():
     # Users must explicitly enable it with the 'enable_logging' command
     
     commands = {
-        "help": lambda: print(help_menu),
+        "help": lambda: print(get_help_menu(tools)),
         "home": lambda: return_to_home(tools),
         "ping": lambda: run_tool('enhanced_ping', tools),
         "http": http_ping,
@@ -723,7 +804,7 @@ def user_inputs():
 
     while True:
         try:
-            userinput = input(f"{Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.BLUE}").strip().lower()
+            userinput = input(f"{Fore.GREEN}Pengu{Fore.WHITE}@{Fore.CYAN}Terminal{Fore.GREEN} >>> {Fore.MAGENTA}").strip().lower()
             
             if userinput in commands:
                 commands[userinput]()
@@ -795,7 +876,15 @@ def main():
     # Import tools (no hardware scan on startup)
     tools = import_tools()
     
+    # Create output directories (Issue 4)
+    create_output_directories()
+    
     print(get_title_ascii(tools))
+    
+    # Display initial Terms of Service notification (Issue 2)
+    print(f"{Fore.YELLOW}By using this tool, you agree to the Terms of Service.")
+    print(f"{Fore.YELLOW}For more information, please enter the 'tos' command.\n")
+    
     user_inputs()
 
 if __name__ == "__main__":
