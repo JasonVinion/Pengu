@@ -36,7 +36,7 @@ def base64_operations():
 {Fore.GREEN}2. {Fore.WHITE}Decode Base64 to text
 {Fore.GREEN}3. {Fore.WHITE}Encode file to Base64
 {Fore.GREEN}4. {Fore.WHITE}Decode Base64 to file
-{Fore.GREEN}5. {Fore.WHITE}Return to main menu
+{Fore.GREEN}5. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-5): ").strip()
@@ -126,7 +126,7 @@ def url_operations():
 {Fore.YELLOW}URL Options:
 {Fore.GREEN}1. {Fore.WHITE}URL Encode text
 {Fore.GREEN}2. {Fore.WHITE}URL Decode text
-{Fore.GREEN}3. {Fore.WHITE}Return to main menu
+{Fore.GREEN}3. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-3): ").strip()
@@ -161,7 +161,7 @@ def html_operations():
 {Fore.YELLOW}HTML Options:
 {Fore.GREEN}1. {Fore.WHITE}HTML Encode text
 {Fore.GREEN}2. {Fore.WHITE}HTML Decode text
-{Fore.GREEN}3. {Fore.WHITE}Return to main menu
+{Fore.GREEN}3. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-3): ").strip()
@@ -199,7 +199,7 @@ def hash_operations():
 {Fore.GREEN}3. {Fore.WHITE}Generate SHA256 hash
 {Fore.GREEN}4. {Fore.WHITE}Generate SHA512 hash
 {Fore.GREEN}5. {Fore.WHITE}Hash file
-{Fore.GREEN}6. {Fore.WHITE}Return to main menu
+{Fore.GREEN}6. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-6): ").strip()
@@ -273,7 +273,7 @@ def hidden_character_analysis():
 {Fore.GREEN}2. {Fore.WHITE}Analyze file for hidden characters
 {Fore.GREEN}3. {Fore.WHITE}Clean text (remove hidden characters)
 {Fore.GREEN}4. {Fore.WHITE}Export last analysis results
-{Fore.GREEN}5. {Fore.WHITE}Return to main menu
+{Fore.GREEN}5. {Fore.WHITE}Return to Utility Menu
 """)
         
         choice = input(f"{Fore.YELLOW}Select option (1-5): ").strip()

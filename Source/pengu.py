@@ -758,12 +758,14 @@ def http_ping():
         print(f"{Fore.RED}Requests module not available for HTTP ping")
 
 def run_tool(tool_name, tools):
-    """Run a specific tool module"""
+    """Run a specific tool module with proper main menu return (Issues 7 & 9)"""
     if tool_name in tools:
         try:
             # Call the main function of the tool
             if hasattr(tools[tool_name], 'main'):
                 tools[tool_name].main()
+                # After tool completion, return to main menu like home command (Issue 7)
+                return_to_home(tools)
             else:
                 print(f"{Fore.YELLOW}Tool {tool_name} doesn't have a main function")
         except Exception as e:
