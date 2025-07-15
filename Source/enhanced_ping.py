@@ -154,14 +154,73 @@ def parse_ping_output_with_stats(line, hostname):
     else:
         return None, None
 
+def get_host_enrichment_data(hostname):
+    """Get enrichment data for ping reports (Issue 6)"""
+    enrichment = {
+        'hostname': hostname,
+        'ip_address': 'N/A', 
+        'reverse_dns': 'N/A',
+        'isp': 'N/A',
+        'organization': 'N/A'
+    }
+    
+    try:
+        # Resolve hostname to IP if needed
+        import socket
+        if hostname.replace('.', '').isdigit() or ':' in hostname:  # IP address
+            enrichment['ip_address'] = hostname
+            # Try reverse DNS lookup
+            try:
+                reverse_result = socket.gethostbyaddr(hostname)
+                enrichment['reverse_dns'] = reverse_result[0]
+            except:
+                pass
+        else:  # Hostname
+            try:
+                ip = socket.gethostbyname(hostname)
+                enrichment['ip_address'] = ip
+                enrichment['reverse_dns'] = hostname
+            except:
+                pass
+        
+        # Try to get ISP/Organization data via whois if available
+        try:
+            import subprocess
+            result = subprocess.run(['whois', enrichment['ip_address']], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                lines = result.stdout.lower()
+                # Extract ISP/Organization
+                for line in lines.split('\n'):
+                    if 'org:' in line or 'orgname:' in line:
+                        enrichment['organization'] = line.split(':', 1)[1].strip()
+                        break
+                    elif 'netname:' in line:
+                        enrichment['isp'] = line.split(':', 1)[1].strip()
+                        break
+        except:
+            pass
+            
+    except Exception:
+        pass
+    
+    return enrichment
+
 def show_ping_statistics(stats, hostname):
-    """Display ping statistics"""
+    """Display ping statistics with enrichment data (Issue 6)"""
     summary = stats.get_summary()
+    enrichment = get_host_enrichment_data(hostname)
     
     print(f"""
-{Fore.CYAN}╔══════════════════════════════════════════════════════╗
+{Fore.CYAN}╔══════════════════════════════════════════════════════════╗
 {Fore.CYAN}║                {Fore.MAGENTA}Ping Statistics for {hostname:<15}{Fore.CYAN}     ║
-{Fore.CYAN}╚══════════════════════════════════════════════════════╝
+{Fore.CYAN}╚══════════════════════════════════════════════════════════╝
+
+{Fore.GREEN}Host Information:
+{Fore.CYAN}  Hostname:     {Fore.WHITE}{enrichment['reverse_dns']}
+{Fore.CYAN}  IP Address:   {Fore.WHITE}{enrichment['ip_address']}
+{Fore.CYAN}  ISP:          {Fore.WHITE}{enrichment['isp']}
+{Fore.CYAN}  Organization: {Fore.WHITE}{enrichment['organization']}
 
 {Fore.GREEN}Packets:
 {Fore.CYAN}  Sent:         {Fore.WHITE}{summary['packets_sent']}
@@ -176,7 +235,7 @@ def show_ping_statistics(stats, hostname):
 """)
 
 def export_ping_results(stats, hostname, ping_type="ICMP"):
-    """Export ping statistics to a file"""
+    """Export ping statistics with enrichment data to a file (Issue 6)"""
     try:
         from datetime import datetime
         import json
@@ -187,8 +246,9 @@ def export_ping_results(stats, hostname, ping_type="ICMP"):
         hostname_safe = hostname.replace(':', '_').replace('.', '_').replace('/', '_')
         filename = f"ping_report_{hostname_safe}_{timestamp}.txt"
         
-        # Get statistics summary
+        # Get statistics summary and enrichment data
         summary = stats.get_summary()
+        enrichment = get_host_enrichment_data(hostname)
         
         # Generate report content
         report_content = f"""PENGU {ping_type.upper()} PING REPORT
@@ -197,6 +257,13 @@ def export_ping_results(stats, hostname, ping_type="ICMP"):
 Target:              {hostname}
 Test Date:           {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Test Type:           {ping_type} Ping
+
+HOST INFORMATION
+{'-' * 30}
+Hostname:            {enrichment['reverse_dns']}
+IP Address:          {enrichment['ip_address']}
+ISP:                 {enrichment['isp']}
+Organization:        {enrichment['organization']}
 
 PACKET STATISTICS
 {'-' * 30}
@@ -254,7 +321,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         for hostname, stats in host_stats.items():
             summary = stats.get_summary()
+            enrichment = get_host_enrichment_data(hostname)
             content += f"""Host: {hostname}
+  Hostname (Reverse DNS): {enrichment['reverse_dns']}
+  IP Address: {enrichment['ip_address']}
+  ISP: {enrichment['isp']}
+  Organization: {enrichment['organization']}
   Packets Sent: {summary['packets_sent']}
   Packets Received: {summary['packets_received']}
   Packet Loss: {summary['packet_loss']:.1f}%

@@ -317,6 +317,10 @@ def return_to_home(tools=None):
     clear_screen()
     print(get_title_ascii(tools))
 
+def return_to_main_menu(tools=None):
+    """Standardized function to return to main menu (Issues 7 & 9)"""
+    return_to_home(tools)
+
 # Ping implementations
 def icmp_ping():
     """ICMP ping implementation - deprecated, use enhanced_ping instead"""
